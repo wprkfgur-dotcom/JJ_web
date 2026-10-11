@@ -1045,3 +1045,16 @@ class AccountManager:
             'df_res': df_res,
             'adjustments': adjustments
         }
+
+    def delete_accounts_by_owner(self, owner_username: str) -> int:
+        """특정 사용자가 소유한 모든 계좌 삭제 (회원 탈퇴/관리자 삭제 시)"""
+        owner_clean = owner_username.strip().lower()
+        accounts = self.load_accounts()
+        remaining = [
+            a for a in accounts
+            if a.get('owner', 'huxley').lower() != owner_clean
+        ]
+        deleted_count = len(accounts) - len(remaining)
+        if deleted_count > 0:
+            self.save_accounts(remaining)
+        return deleted_count

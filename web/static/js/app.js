@@ -148,6 +148,12 @@ function showAppView() {
         linkedEl.textContent = '연동 계좌 조회 중...';
       }
     }
+
+    // 관리자(Admin) 전용 회원 관리 탭 노출 여부 제어
+    const adminTabBtn = document.getElementById('tab-btn-admin');
+    if (adminTabBtn) {
+      adminTabBtn.style.display = (state.user && state.user.role === 'admin') ? 'inline-flex' : 'none';
+    }
   }
 }
 
@@ -336,6 +342,10 @@ function switchTab(tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => {
     p.classList.toggle('active', p.id === `tab-${tabId}`);
   });
+
+  if (tabId === 'admin') {
+    loadAdminUsers();
+  }
 
   if (tabId === 'backtest' && !state.backtestResults) {
     // 백테스트 탭 처음 열릴 때 빠른 실행 제안
@@ -1401,3 +1411,122 @@ async function saveSyncSettings() {
     showToast('설정 저장 실패', 'error');
   }
 }
+
+// -------------------------------------------------------------------
+// 관리자 전용: 회원 목록 조회 및 계정 삭제
+// -------------------------------------------------------------------
+async function loadAdminUsers() {
+  const tbody = document.getElementById('admin-users-tbody');
+  const countBadge = document.getElementById('admin-user-count-badge');
+  if (!tbody) return;
+
+  try {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
+          <span>🔄</span> 회원 목록을 조회하는 중입니다...
+        </td>
+      </tr>
+    `;
+
+    const res = await authFetch('/api/admin/users');
+    if (!res.ok) {
+      if (res.status === 403) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align:center;padding:2.5rem;color:var(--loss-red);">
+              ⚠️ 회원 관리 접근 권한이 없습니다. 관리자(Admin) 계정으로 로그인해주세요.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const users = data.users || [];
+    if (countBadge) {
+      countBadge.textContent = `총 ${users.length}명 등록됨`;
+    }
+
+    if (users.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
+            등록된 회원이 없습니다.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const currentUsername = state.user ? state.user.username.toLowerCase() : '';
+
+    tbody.innerHTML = users.map((u, idx) => {
+      const isMe = u.username.toLowerCase() === currentUsername;
+      const isMaster = u.username.toLowerCase() === 'huxley';
+      const isAdmin = u.role === 'admin';
+
+      const roleBadge = isAdmin
+        ? `<span class="badge" style="background:rgba(99,102,241,0.18);color:#a5b4fc;border:1px solid rgba(99,102,241,0.35);font-weight:600;padding:0.25rem 0.55rem;border-radius:4px;">👑 관리자</span>`
+        : `<span class="badge" style="background:rgba(100,116,139,0.18);color:#94a3b8;border:1px solid rgba(100,116,139,0.3);padding:0.25rem 0.55rem;border-radius:4px;">👤 일반회원</span>`;
+
+      const actionBtn = (isMe || isMaster)
+        ? `<span class="badge" style="background:rgba(148,163,184,0.12);color:var(--text-muted);font-size:0.75rem;padding:0.25rem 0.5rem;border-radius:4px;">${isMe ? '본인 (삭제 불가)' : '마스터 관리자'}</span>`
+        : `<button class="btn btn-danger btn-xs" onclick="deleteUserByAdmin('${u.username}')" style="padding:0.25rem 0.6rem;font-size:0.8rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);cursor:pointer;border-radius:4px;">🗑️ 계정 삭제</button>`;
+
+      return `
+        <tr style="border-bottom:1px solid var(--border-subtle);">
+          <td style="text-align:center;color:var(--text-muted);font-size:0.85rem;">${idx + 1}</td>
+          <td>
+            <div style="font-weight:600;color:var(--text-bright);display:flex;align-items:center;gap:0.4rem;">
+              <span>${u.username}</span>
+              ${isMe ? '<span style="font-size:0.7rem;color:#38bdf8;background:rgba(56,189,248,0.15);padding:0.1rem 0.35rem;border-radius:3px;">나</span>' : ''}
+            </div>
+          </td>
+          <td style="color:var(--text-secondary);font-size:0.9rem;">
+            ${u.email || '<span style="color:var(--text-muted);">-</span>'}
+          </td>
+          <td style="text-align:center;">${roleBadge}</td>
+          <td style="color:var(--text-muted);font-size:0.85rem;">${u.created_at || '-'}</td>
+          <td style="text-align:center;">${actionBtn}</td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (e) {
+    console.error('loadAdminUsers error:', e);
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center;padding:2rem;color:var(--loss-red);">
+          회원 목록을 불러오는 중 오류가 발생했습니다: ${e.message}
+        </td>
+      </tr>
+    `;
+    showToast('회원 목록 조회 실패', 'error');
+  }
+}
+
+async function deleteUserByAdmin(targetUsername) {
+  if (!targetUsername) return;
+  const ok = confirm(`정말 '${targetUsername}' 회원을 영구 삭제하시겠습니까?\n\n⚠️ 해당 회원의 모든 투자 계좌와 데이터도 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.`);
+  if (!ok) return;
+
+  try {
+    const res = await authFetch(`/api/admin/users/${encodeURIComponent(targetUsername)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.detail || data.message || '회원 삭제에 실패했습니다.', 'error');
+      return;
+    }
+
+    showToast(`'${targetUsername}' 회원이 정상적으로 삭제되었습니다.`, 'success');
+    await loadAdminUsers();
+  } catch (e) {
+    showToast(`회원 삭제 처리 오류: ${e.message}`, 'error');
+  }
+}
+

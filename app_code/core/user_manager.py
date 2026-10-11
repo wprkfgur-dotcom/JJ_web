@@ -69,18 +69,27 @@ class UserManager:
         self._load_sessions()
 
     def _init_default_huxley(self):
-        """기존 huxley 관리자 계정이 없으면 안전하게 암호화하여 초기화"""
+        """기존 huxley 관리자 계정이 없으면 안전하게 암호화하여 초기화 (관리자 권한 부여)"""
         users = self.load_users()
+        needs_save = False
         if "huxley" not in users:
             users["huxley"] = {
                 "username": "huxley",
                 "email": "huxley@oracle.server",
                 "password_hash": hash_password("lee0320"),
                 "name": "Huxley",
+                "role": "admin",
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
+            needs_save = True
+            print("[UserManager] 기본 huxley 최고 관리자 계정 생성 완료.")
+        else:
+            if users["huxley"].get("role") != "admin":
+                users["huxley"]["role"] = "admin"
+                needs_save = True
+
+        if needs_save:
             self.save_users(users)
-            print("[UserManager] 기본 huxley 계정 암호화 생성 완료.")
 
     def load_users(self) -> Dict[str, Any]:
         try:
@@ -150,6 +159,7 @@ class UserManager:
             "email": email_clean,
             "password_hash": hash_password(pwd),
             "name": username.strip(),
+            "role": "user",  # 신규 회원은 일반회원으로 기본 등록
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -160,6 +170,8 @@ class UserManager:
             "username": uname_clean,
             "email": email_clean,
             "name": username.strip(),
+            "role": "user",
+            "role_label": "일반회원",
             "created_at": user_record["created_at"]
         }
 
@@ -187,10 +199,14 @@ class UserManager:
         if not verify_password(pwd, user.get("password_hash", "")):
             return None
 
+        role = user.get("role", "admin" if uname_clean == "huxley" else "user")
+
         return {
             "username": uname_clean,
             "email": user.get("email", ""),
             "name": user.get("name", uname_clean),
+            "role": role,
+            "role_label": "관리자" if role == "admin" else "일반회원",
             "created_at": user.get("created_at", "")
         }
 
@@ -230,10 +246,14 @@ class UserManager:
         if not u:
             return None
 
+        role = u.get("role", "admin" if u["username"].lower() == "huxley" else "user")
+
         return {
             "username": u["username"],
             "email": u.get("email", ""),
             "name": u.get("name", u["username"]),
+            "role": role,
+            "role_label": "관리자" if role == "admin" else "일반회원",
             "created_at": u.get("created_at", "")
         }
 
@@ -241,3 +261,62 @@ class UserManager:
         if token in self._memory_sessions:
             del self._memory_sessions[token]
             self._save_sessions()
+
+    def list_users(self) -> list:
+        """
+        전체 회원 목록 반환 (관리자 전용)
+        ID, 이메일, 이름, 회원 종류(권한), 가입일시만 노출 (비밀번호 해시는 절대 노출하지 않음)
+        """
+        users = self.load_users()
+        result = []
+        for u in users.values():
+            uname = u.get("username", "")
+            role = u.get("role")
+            if not role:
+                role = "admin" if uname.lower() == "huxley" else "user"
+            result.append({
+                "username": uname,
+                "email": u.get("email", ""),
+                "name": u.get("name", uname),
+                "role": role,
+                "role_label": "관리자" if role == "admin" else "일반회원",
+                "created_at": u.get("created_at", "-")
+            })
+
+        # 관리자 우선 정렬 후 등록일 역순
+        result.sort(key=lambda x: (0 if x["role"] == "admin" else 1, x.get("created_at", "")), reverse=False)
+        return result
+
+    def delete_user(self, target_username: str, requester_username: str) -> bool:
+        """
+        회원 계정 삭제 (관리자 전용)
+        - 본인 계정 및 최고 관리자(huxley) 삭제 불가 보호
+        - 삭제 시 해당 회원의 모든 세션 토큰 즉시 무효화
+        """
+        target_clean = target_username.strip().lower()
+        req_clean = requester_username.strip().lower()
+
+        if target_clean == req_clean:
+            raise ValueError("현재 로그인 중인 본인 계정은 삭제할 수 없습니다.")
+        if target_clean == "huxley":
+            raise ValueError("시스템 최고 관리자(huxley) 계정은 삭제할 수 없습니다.")
+
+        users = self.load_users()
+        if target_clean not in users:
+            raise ValueError(f"'{target_username}' 회원을 찾을 수 없습니다.")
+
+        # 1. 회원 정보 삭제
+        del users[target_clean]
+        self.save_users(users)
+
+        # 2. 해당 회원의 활성 세션 토큰 파기
+        tokens_to_del = [
+            t for t, s in self._memory_sessions.items()
+            if s.get("username", "").lower() == target_clean
+        ]
+        for t in tokens_to_del:
+            del self._memory_sessions[t]
+        if tokens_to_del:
+            self._save_sessions()
+
+        return True

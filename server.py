@@ -258,6 +258,8 @@ async def register(req: RegisterRequest):
                 "username": user["username"],
                 "email": user["email"],
                 "name": user["name"],
+                "role": user.get("role", "user"),
+                "role_label": user.get("role_label", "일반회원"),
                 "created_at": user["created_at"]
             },
             "message": f"환영합니다! {user['name']}님 회원가입이 완료되었습니다."
@@ -289,6 +291,8 @@ async def login(req: LoginRequest):
             "username": user["username"],
             "email": user.get("email", ""),
             "name": user["name"],
+            "role": user.get("role", "admin" if user["username"].lower() == "huxley" else "user"),
+            "role_label": user.get("role_label", "관리자" if user["username"].lower() == "huxley" else "일반회원"),
             "linked_accounts": user_accounts,
             "login_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -313,6 +317,8 @@ async def check_current_user(request: Request):
             "username": user["username"],
             "email": user.get("email", ""),
             "name": user["name"],
+            "role": user.get("role", "admin" if user["username"].lower() == "huxley" else "user"),
+            "role_label": user.get("role_label", "관리자" if user["username"].lower() == "huxley" else "일반회원"),
             "linked_accounts": user_accounts
         }
     }
@@ -326,6 +332,46 @@ async def logout(request: Request):
     if token:
         um.delete_session(token)
     return {"success": True, "message": "성공적으로 로그아웃되었습니다."}
+
+
+# -------------------------------------------------------------------
+# 관리자 전용 회원 관리 API 라우트
+# -------------------------------------------------------------------
+@app.get("/api/admin/users")
+async def admin_list_users(request: Request):
+    """전체 회원 목록 조회 (관리자 전용: ID, 이메일, 회원 구분만 반환, PW는 비노출)"""
+    curr = get_current_user(request)
+    if not curr or curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="관리자(Admin) 권한이 필요한 기능입니다.")
+
+    users = um.list_users()
+    return {
+        "success": True,
+        "users": users,
+        "total_count": len(users)
+    }
+
+
+@app.delete("/api/admin/users/{target_username}")
+async def admin_delete_user(target_username: str, request: Request):
+    """회원 계정 삭제 (관리자 전용: 본인/최고관리자 삭제 불가, 계좌 데이터 동시 정리)"""
+    curr = get_current_user(request)
+    if not curr or curr.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="관리자(Admin) 권한이 필요한 기능입니다.")
+
+    try:
+        um.delete_user(target_username, curr["username"])
+        del_acc_count = am.delete_accounts_by_owner(target_username)
+        return {
+            "success": True,
+            "message": f"'{target_username}' 회원이 성공적으로 삭제되었습니다. (연동 계좌 {del_acc_count}개 정리됨)",
+            "deleted_username": target_username,
+            "deleted_accounts_count": del_acc_count
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"회원 삭제 중 오류가 발생했습니다: {str(e)}")
 
 
 # -------------------------------------------------------------------
