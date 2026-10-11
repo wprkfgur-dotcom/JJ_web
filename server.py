@@ -122,11 +122,16 @@ def sanitize_for_json(val: Any) -> Any:
         return bool(val)
     if isinstance(val, (pd.Timestamp, datetime)):
         return val.strftime("%Y-%m-%d %H:%M:%S") if hasattr(val, 'hour') and (val.hour or val.minute) else val.strftime("%Y-%m-%d")
+    if isinstance(val, pd.DataFrame):
+        return sanitize_for_json(val.to_dict(orient="records"))
+    if isinstance(val, pd.Series):
+        return sanitize_for_json(val.to_dict())
     if isinstance(val, dict):
         return {str(k): sanitize_for_json(v) for k, v in val.items()}
-    if isinstance(val, (list, tuple, np.ndarray, pd.Series)):
+    if isinstance(val, (list, tuple, np.ndarray, set)):
         return [sanitize_for_json(x) for x in val]
     return val
+
 
 
 def get_market_status() -> dict:
@@ -362,18 +367,21 @@ async def get_account_detail(acc_id: str):
 
     details = am.compute_account_details(target)
     
-    buy_orders = details.get("buy_orders", [])
-    sell_orders = details.get("sell_orders", [])
-    unsold_lots = details.get("unsold_lots", [])
-    netting_info = details.get("netting_info", {})
+    # df_res는 대용량 DataFrame이므로 응답 크기 절약 및 안전한 JSON 직렬화를 위해 제외
+    details_clean = {k: v for k, v in details.items() if k != "df_res"}
+
+    buy_orders = details_clean.get("buy_orders", [])
+    sell_orders = details_clean.get("sell_orders", [])
+    unsold_lots = details_clean.get("unsold_lots", [])
+    netting_info = details_clean.get("netting_info", {})
 
     trade_records = target.get("trade_records", [])
     adjustments = target.get("adjustments", [])
 
     return sanitize_for_json({
         "account": target,
-        "details": details,
-        "summary": details,
+        "details": details_clean,
+        "summary": details_clean,
         "orders": {
             "buy_orders": buy_orders,
             "sell_orders": sell_orders,
