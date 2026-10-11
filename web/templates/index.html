@@ -364,6 +364,7 @@
             <div class="chips-row">
               <button type="button" class="chip-btn" onclick="quickFillBacktest('SOXL')">SOXL</button>
               <button type="button" class="chip-btn" onclick="quickFillBacktest('TQQQ')">TQQQ</button>
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('SCHD')">SCHD</button>
               <button type="button" class="chip-btn" onclick="quickFillBacktest('QLD')">QLD</button>
               <button type="button" class="chip-btn" onclick="quickFillBacktest('UPRO')">UPRO</button>
             </div>
@@ -413,6 +414,18 @@
           <label class="checkbox-label">
             <input type="checkbox" id="strat-bnh" checked>
             <span>단순보유 (Buy & Hold 벤치마크)</span>
+          </label>
+        </div>
+
+        <!-- Dividend / Total Return Option -->
+        <div class="dividend-option-card">
+          <div class="dividend-option-info">
+            <span class="dividend-option-title">💰 배당금 재투자 반영 (Total Return / 수정주가)</span>
+            <span class="dividend-option-desc">야후 파이낸스 수정주가(Adj Close)를 적용하여 SCHD 등 배당형 종목의 배당 재투자 총수익률을 정확히 산출합니다.</span>
+          </div>
+          <label class="toggle-switch-ui">
+            <input type="checkbox" id="bt-adj-close" checked>
+            <span class="toggle-switch-slider"></span>
           </label>
         </div>
 

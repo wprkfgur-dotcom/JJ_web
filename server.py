@@ -215,6 +215,7 @@ class BacktestRequest(BaseModel):
     start_date: str = Field(default="2023-01-03")
     end_date: str = Field(default="2026-10-09")
     strategies: List[str] = Field(default=["종종이 기본전략", "무한매수법 v4.0", "SOXL 단순보유(B&H)"])
+    use_adj_close: bool = Field(default=True)
 
 class RegisterRequest(BaseModel):
     email: str = Field(..., example="user@example.com")
@@ -761,8 +762,8 @@ async def run_backtest_simulation(req: BacktestRequest):
     """
     ticker_clean = req.ticker.strip().upper()
     try:
-        # 시세 데이터 수집 (야후 파이낸스 & 로컬 SQLite 캐시) - 모바일 앱과 100% 동일하게 warmup_days=50 적용
-        df_market = fetch_market_data(ticker_clean, req.start_date, req.end_date, warmup_days=50)
+        # 시세 데이터 수집 (야후 파이낸스 & 로컬 SQLite 캐시) - 배당 재투자(Total Return / 수정주가) 옵션 지원
+        df_market = fetch_market_data(ticker_clean, req.start_date, req.end_date, warmup_days=50, use_adj_close=req.use_adj_close)
         if df_market.empty:
             raise HTTPException(status_code=400, detail=f"[{ticker_clean}] 기간 내 시세 데이터를 가져올 수 없습니다.")
 
@@ -781,6 +782,7 @@ async def run_backtest_simulation(req: BacktestRequest):
             "capital": req.capital,
             "start_date": req.start_date,
             "end_date": req.end_date,
+            "use_adj_close": req.use_adj_close,
             "strategies": []
         }
 

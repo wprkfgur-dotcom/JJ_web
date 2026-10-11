@@ -1186,6 +1186,7 @@ async function runBacktest() {
   const capital = parseFloat(document.getElementById('bt-capital').value) || 200000;
   const startDate = document.getElementById('bt-start-date').value;
   const endDate = document.getElementById('bt-end-date').value;
+  const useAdjClose = document.getElementById('bt-adj-close') ? document.getElementById('bt-adj-close').checked : true;
 
   const strategies = [];
   if (document.getElementById('strat-jj').checked) strategies.push('종종이 기본전략');
@@ -1211,7 +1212,8 @@ async function runBacktest() {
         ticker, capital,
         start_date: startDate,
         end_date: endDate,
-        strategies
+        strategies,
+        use_adj_close: useAdjClose
       })
     });
 
@@ -1223,7 +1225,9 @@ async function runBacktest() {
     const data = await res.json();
     state.backtestResults = data;
     renderBacktestResults(data);
-    showToast('백테스트 시뮬레이션이 성공적으로 완료되었습니다.');
+    showToast(data.use_adj_close 
+      ? '백테스트 완료: 배당금 재투자(Total Return)가 반영되었습니다.' 
+      : '백테스트 완료: 단순 주가(Price Return) 기준입니다.');
   } catch (e) {
     showToast(`백테스트 실패: ${e.message}`, 'error');
   } finally {
@@ -1237,6 +1241,16 @@ function renderBacktestResults(data) {
   container.style.display = 'block';
 
   // 1. 전략 비교 테이블
+  const tableTitle = document.querySelector('#backtest-results-container .section-title');
+  if (tableTitle) {
+    tableTitle.innerHTML = `
+      <span>🏆</span> 전략별 핵심 성과 지표 비교
+      <span style="margin-left:10px;font-size:0.75rem;padding:3px 8px;border-radius:6px;font-weight:600;background:${data.use_adj_close ? 'rgba(16,185,129,0.15)' : 'rgba(148,163,184,0.15)'};color:${data.use_adj_close ? '#34d399' : '#94a3b8'};border:1px solid ${data.use_adj_close ? 'rgba(16,185,129,0.3)' : 'rgba(148,163,184,0.3)'}">
+        ${data.use_adj_close ? '💰 배당 재투자(Total Return) 반영' : '📈 단순 종가(Price Return) 기준'}
+      </span>
+    `;
+  }
+
   const tableBody = document.getElementById('bt-comparison-tbody');
   tableBody.innerHTML = data.strategies.map(s => {
     const m = s.metrics;

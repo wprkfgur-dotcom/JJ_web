@@ -42,9 +42,15 @@ def init_market_db(conn: sqlite3.Connection = None):
                 low REAL,
                 close REAL NOT NULL,
                 volume REAL,
+                adj_close REAL,
                 PRIMARY KEY (ticker, date)
             )
         """)
+        # 컬럼 마이그레이션: 기존 DB에 adj_close 컬럼이 없으면 추가
+        cur.execute("PRAGMA table_info(daily_candles)")
+        cols = [c[1] for c in cur.fetchall()]
+        if 'adj_close' not in cols:
+            cur.execute("ALTER TABLE daily_candles ADD COLUMN adj_close REAL")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ticker_date ON daily_candles(ticker, date)")
         conn.commit()
     finally:
@@ -69,18 +75,20 @@ def save_candles_to_db(ticker: str, df: pd.DataFrame):
             h = float(row.get('High', c))
             l = float(row.get('Low', c))
             v = float(row.get('Volume', 0.0))
-            rows.append((ticker, d_str, o, h, l, c, v))
+            adj = float(row.get('Adj Close', c)) if pd.notnull(row.get('Adj Close', None)) else c
+            rows.append((ticker, d_str, o, h, l, c, v, adj))
 
         cur = conn.cursor()
         cur.executemany("""
-            INSERT INTO daily_candles (ticker, date, open, high, low, close, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO daily_candles (ticker, date, open, high, low, close, volume, adj_close)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(ticker, date) DO UPDATE SET
                 open=excluded.open,
                 high=excluded.high,
                 low=excluded.low,
                 close=excluded.close,
-                volume=excluded.volume
+                volume=excluded.volume,
+                adj_close=excluded.adj_close
         """, rows)
         conn.commit()
     except Exception as ex:
@@ -89,8 +97,8 @@ def save_candles_to_db(ticker: str, df: pd.DataFrame):
         conn.close()
 
 
-def get_cached_candles_from_db(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
-    """로컬 SQLite DB에서 해당 기간의 시세 데이터를 조회합니다."""
+def get_cached_candles_from_db(ticker: str, start_date: str, end_date: str, use_adj_close: bool = False) -> pd.DataFrame:
+    """로컬 SQLite DB에서 해당 기간의 시세 데이터를 조회합니다. (use_adj_close=True 시 수정주가로 변환)"""
     ticker = ticker.upper().strip()
     db_path = get_db_path()
     if not os.path.exists(db_path):
@@ -100,7 +108,7 @@ def get_cached_candles_from_db(ticker: str, start_date: str, end_date: str) -> p
     try:
         init_market_db(conn)
         query = """
-            SELECT date as Date, open as Open, high as High, low as Low, close as Close, volume as Volume
+            SELECT date as Date, open as Open, high as High, low as Low, close as Close, volume as Volume, adj_close as Adj_Close
             FROM daily_candles
             WHERE ticker = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
@@ -108,6 +116,15 @@ def get_cached_candles_from_db(ticker: str, start_date: str, end_date: str) -> p
         df = pd.read_sql_query(query, conn, params=(ticker, start_date, end_date))
         if not df.empty:
             df['Date'] = pd.to_datetime(df['Date'])
+            if use_adj_close and 'Adj_Close' in df.columns:
+                has_adj = df['Adj_Close'].notnull() & (df['Adj_Close'] > 0) & (df['Close'] > 0)
+                if has_adj.any():
+                    df['Raw_Close'] = df['Close'].copy()
+                    adj_ratio = df.loc[has_adj, 'Adj_Close'] / df.loc[has_adj, 'Close']
+                    df.loc[has_adj, 'Open'] = (df.loc[has_adj, 'Open'] * adj_ratio).round(4)
+                    df.loc[has_adj, 'High'] = (df.loc[has_adj, 'High'] * adj_ratio).round(4)
+                    df.loc[has_adj, 'Low'] = (df.loc[has_adj, 'Low'] * adj_ratio).round(4)
+                    df.loc[has_adj, 'Close'] = df.loc[has_adj, 'Adj_Close'].round(4)
         return df
     except Exception as ex:
         print(f"[{ticker}] 시세 DB 조회 안내: {ex}")
@@ -189,14 +206,15 @@ def get_price_from_db(ticker: str, target_date: str) -> float:
 
 
 
-def fetch_market_data(ticker: str, start_date: str, end_date: str, warmup_days: int = 50) -> pd.DataFrame:
+def fetch_market_data(ticker: str, start_date: str, end_date: str, warmup_days: int = 50, use_adj_close: bool = False) -> pd.DataFrame:
     """
     야후 파이낸스 및 로컬 SQLite DB에서 시세 데이터를 수집합니다.
     - DB에 이미 저장된 날짜 범위는 네트워크 통신 없이 초고속으로 로드합니다.
     - 데이터가 누락된 경우에만 야후 파이낸스에서 필요한 구간을 증분 다운로드하여 DB를 갱신합니다.
+    - use_adj_close=True 시 배당 재투자(Total Return)가 반영된 수정주가를 적용합니다.
     """
     ticker = ticker.upper().strip()
-    cache_key = (ticker, start_date, end_date, warmup_days)
+    cache_key = (ticker, start_date, end_date, warmup_days, use_adj_close)
     if cache_key in _DATA_CACHE:
         return _DATA_CACHE[cache_key].copy()
 
@@ -223,6 +241,26 @@ def fetch_market_data(ticker: str, start_date: str, end_date: str, warmup_days: 
             need_download = True
             dl_start = max_d
             dl_end = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        elif use_adj_close:
+            # DB에 adj_close가 채워지지 않은 과거 레코드가 있는지 검사
+            db_path = get_db_path()
+            if os.path.exists(db_path):
+                conn = sqlite3.connect(db_path)
+                try:
+                    cur = conn.cursor()
+                    cur.execute("""
+                        SELECT COUNT(*) FROM daily_candles
+                        WHERE ticker = ? AND date >= ? AND date <= ? AND (adj_close IS NULL OR adj_close = 0)
+                    """, (ticker, warmup_start, end_date))
+                    missing_cnt = cur.fetchone()[0]
+                    if missing_cnt > 0:
+                        need_download = True
+                        dl_start = warmup_start
+                        dl_end = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+                except Exception:
+                    pass
+                finally:
+                    conn.close()
 
     # 2. 꼭 필요한 경우에만 야후 파이낸스 증분 다운로드
     if need_download:
@@ -239,14 +277,15 @@ def fetch_market_data(ticker: str, start_date: str, end_date: str, warmup_days: 
                     'High': raw['High'].astype(float).values if 'High' in raw.columns else raw['Close'].astype(float).values,
                     'Low': raw['Low'].astype(float).values if 'Low' in raw.columns else raw['Close'].astype(float).values,
                     'Close': raw['Close'].astype(float).values,
-                    'Volume': raw['Volume'].astype(float).values if 'Volume' in raw.columns else 0.0
+                    'Volume': raw['Volume'].astype(float).values if 'Volume' in raw.columns else 0.0,
+                    'Adj Close': raw['Adj Close'].astype(float).values if 'Adj Close' in raw.columns else raw['Close'].astype(float).values
                 }).reset_index(drop=True)
                 save_candles_to_db(ticker, df_new)
         except Exception as ex:
             print(f"[{ticker}] 야후 파이낸스 다운로드 실패(로컬 DB 데이터로 대체 진행): {ex}")
 
     # 3. 로컬 DB에서 필요한 전체 범위 추출
-    df_cached = get_cached_candles_from_db(ticker, warmup_start, end_date)
+    df_cached = get_cached_candles_from_db(ticker, warmup_start, end_date, use_adj_close=use_adj_close)
     if not df_cached.empty:
         trade_start_indices = df_cached[df_cached['Date'] >= pd.Timestamp(start_date)].index
         if len(trade_start_indices) > 0:
@@ -264,12 +303,16 @@ def fetch_market_data(ticker: str, start_date: str, end_date: str, warmup_days: 
         'High': raw['High'].astype(float).values if 'High' in raw.columns else raw['Close'].astype(float).values,
         'Low': raw['Low'].astype(float).values if 'Low' in raw.columns else raw['Close'].astype(float).values,
         'Close': raw['Close'].astype(float).values,
-        'Volume': raw['Volume'].astype(float).values if 'Volume' in raw.columns else 0.0
+        'Volume': raw['Volume'].astype(float).values if 'Volume' in raw.columns else 0.0,
+        'Adj Close': raw['Adj Close'].astype(float).values if 'Adj Close' in raw.columns else raw['Close'].astype(float).values
     }).reset_index(drop=True)
 
     save_candles_to_db(ticker, df)
-    _DATA_CACHE[cache_key] = df
-    return df.copy()
+    df_final = get_cached_candles_from_db(ticker, warmup_start, end_date, use_adj_close=use_adj_close)
+    if df_final.empty:
+        df_final = df
+    _DATA_CACHE[cache_key] = df_final
+    return df_final.copy()
 
 
 _HISTORICAL_PRICE_CACHE = {}
