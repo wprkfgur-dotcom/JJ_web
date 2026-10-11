@@ -808,16 +808,51 @@
             </button>
           </div>
 
-          <!-- 3단계 연동 튜토리얼 가이드 -->
-          <div style="background:rgba(30,41,59,0.5);border:1px dashed var(--border-subtle);border-radius:var(--radius-sm);padding:0.85rem 1rem;font-size:0.8rem;line-height:1.5;color:var(--text-secondary);">
-            <strong style="color:var(--text-bright);">📱 텔레그램 봇 토큰 & 챗 ID 3분 발급 가이드:</strong>
-            <ol style="margin:0.4rem 0 0 1.2rem;padding:0;">
-              <li>텔레그램 검색창에 <code>@BotFather</code> 검색 후 <b>/start</b> &rarr; <b>/newbot</b> 입력</li>
-              <li>안내에 따라 봇 이름 지정 후 발급되는 <b>HTTP API Token</b>을 복사하여 위 [봇 토큰]에 입력</li>
-              <li>생성된 본인 봇 링크를 눌러 채팅방에 들어간 뒤 <b>/start</b>를 꼭 한 번 전송</li>
-              <li>텔레그램 검색창에 <code>@userinfobot</code> 검색 후 시작하여 내 숫자 <b>Id</b>를 복사해 [챗 ID]에 입력</li>
-              <li>위 <b>[테스트 메시지 발송]</b> 버튼을 눌러 핸드폰으로 알림이 오면 완료!</li>
-            </ol>
+          <!-- 텔레그램 봇 토큰 & 챗 ID 발급 상세 가이드 -->
+          <div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:var(--radius-sm);padding:1rem 1.15rem;font-size:0.82rem;line-height:1.6;color:var(--text-secondary);">
+            <div style="font-weight:700;color:var(--text-bright);display:flex;align-items:center;gap:0.4rem;margin-bottom:0.75rem;font-size:0.9rem;">
+              <span>📱</span> 스마트폰 텔레그램 설정값 발급 가이드 (3분 완성)
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:0.75rem;">
+              <!-- 1단계: 봇 생성 및 토큰 받기 -->
+              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #38bdf8;">
+                <strong style="color:#38bdf8;font-size:0.85rem;">1. 봇 생성 및 토큰(Bot Token) 받기:</strong>
+                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
+                  <li>텔레그램 검색창에 <code>@BotFather</code> 를 검색하여 대화방에 들어간 뒤 <b>시작(/start)</b>을 누릅니다.</li>
+                  <li><b>/newbot</b> 을 입력합니다.</li>
+                  <li>봇 이름(예: <code>My JJ Invest</code>)과 봇 아이디(예: <code>my_jj_invest_bot</code> - <em>끝에 bot으로 끝나야 함</em>)를 차례로 입력합니다.</li>
+                  <li>생성이 완료되면 <code>Use this token to access the HTTP API:</code> 뒤에 나오는 <b>긴 토큰 문자열(예: <code>7123456789:AAHk...</code>)</b>을 복사하여 위 <b>[봇 토큰]</b>에 붙여넣습니다.</li>
+                </ul>
+              </div>
+
+              <!-- 2단계: 첫 대화 시작하기 -->
+              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #f59e0b;">
+                <strong style="color:#fbbf24;font-size:0.85rem;">2. 생성한 봇과 첫 대화 시작하기 (필수):</strong>
+                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
+                  <li>BotFather가 알려준 <b>내 봇 링크(예: <code>t.me/내봇아이디</code>)</b>를 눌러 내 봇과의 채팅방으로 들어간 뒤 <b>시작(/start) 버튼을 한 번 눌러줍니다.</b></li>
+                  <li><span style="color:#f87171;font-weight:600;">※ 중요:</span> 내가 봇에게 첫 인사를 먼저 보내야만 봇이 나에게 알림 메시지를 보낼 수 있는 권한이 생깁니다.</li>
+                </ul>
+              </div>
+
+              <!-- 3단계: 내 챗 ID 확인하기 -->
+              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #a855f7;">
+                <strong style="color:#c084fc;font-size:0.85rem;">3. 내 챗 ID(Chat ID) 확인하기:</strong>
+                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
+                  <li>텔레그램 검색창에 <code>@userinfobot</code> 을 검색하여 대화방에 들어간 뒤 <b>시작(/start)</b>을 누릅니다.</li>
+                  <li>봇이 알려주는 내 프로필 정보 중 <b>Id: 123456789 (숫자)</b>를 복사하여 위 <b>[챗 ID]</b>에 붙여넣습니다.</li>
+                </ul>
+              </div>
+
+              <!-- 4단계: 테스트 및 저장 -->
+              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #10b981;">
+                <strong style="color:#34d399;font-size:0.85rem;">4. 테스트 및 저장:</strong>
+                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
+                  <li>위의 <b>[🔔 스마트폰으로 텔레그램 테스트 메시지 발송]</b> 버튼을 누릅니다.</li>
+                  <li>스마트폰 텔레그램으로 축하 알림 메시지가 도착하면 아래 <b>[설정 저장하기]</b>를 눌러 완료합니다.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
 
