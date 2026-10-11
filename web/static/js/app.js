@@ -1374,7 +1374,54 @@ async function loadCloudSyncStatus() {
   } catch (e) {}
 }
 
+let currentSettingTab = 'tg';
+
+function switchSettingTab(tab) {
+  currentSettingTab = tab;
+  const btnTg = document.getElementById('btn-setting-tab-tg');
+  const btnSync = document.getElementById('btn-setting-tab-sync');
+  const panelTg = document.getElementById('setting-panel-tg');
+  const panelSync = document.getElementById('setting-panel-sync');
+
+  if (btnTg) btnTg.classList.toggle('active', tab === 'tg');
+  if (btnSync) btnSync.classList.toggle('active', tab === 'sync');
+  if (panelTg) panelTg.style.display = tab === 'tg' ? 'block' : 'none';
+  if (panelSync) panelSync.style.display = tab === 'sync' ? 'block' : 'none';
+}
+
 async function openSyncSettingsModal() {
+  switchSettingTab('tg'); // 기본으로 텔레그램 알림 탭 활성화
+  document.getElementById('cloudSyncModal').classList.add('active');
+
+  // 1. 텔레그램 설정 로드
+  try {
+    const resTg = await fetch('/api/telegram/config');
+    if (resTg.ok) {
+      const dataTg = await resTg.json();
+      document.getElementById('tg-bot-token').value = dataTg.bot_token || '';
+      document.getElementById('tg-chat-id').value = dataTg.chat_id || '';
+      document.getElementById('tg-enabled-check').checked = Boolean(dataTg.enabled);
+      
+      const stEl = document.getElementById('tg-modal-status-text');
+      if (stEl) {
+        if (dataTg.enabled && dataTg.bot_token && dataTg.chat_id) {
+          stEl.textContent = '연동 활성화 (Active)';
+          stEl.style.color = 'var(--profit-green)';
+        } else {
+          stEl.textContent = '미연동 / 비활성화';
+          stEl.style.color = 'var(--text-muted)';
+        }
+      }
+      const timeEl = document.getElementById('tg-modal-last-time');
+      if (timeEl) timeEl.textContent = dataTg.last_test_time || '테스트 이력 없음';
+      const statusEl = document.getElementById('tg-modal-last-status');
+      if (statusEl) statusEl.textContent = dataTg.last_test_status || '';
+    }
+  } catch (e) {
+    console.error('Telegram config load error:', e);
+  }
+
+  // 2. 구글 드라이브 설정 로드
   try {
     const res = await fetch('/api/sync/status');
     const data = await res.json();
@@ -1389,33 +1436,109 @@ async function openSyncSettingsModal() {
     if (lastTime) lastTime.textContent = data.last_sync_time || '동기화 이력 없음';
     const lastMsg = document.getElementById('sync-modal-last-msg');
     if (lastMsg) lastMsg.textContent = data.last_sync_message || '';
-
-    document.getElementById('cloudSyncModal').classList.add('active');
   } catch (e) {
-    showToast('동기화 설정을 불러오지 못했습니다.', 'error');
+    console.error('Sync config load error:', e);
   }
 }
 
-async function saveSyncSettings() {
-  const url = document.getElementById('sync-gas-url').value.trim();
-  const enabled = document.getElementById('sync-enabled-check').checked;
+async function sendTelegramTest() {
+  const bot_token = document.getElementById('tg-bot-token').value.trim();
+  const chat_id = document.getElementById('tg-chat-id').value.trim();
+  const testBtn = document.getElementById('btn-tg-test');
+
+  if (!bot_token) {
+    showToast('텔레그램 봇 토큰(Bot Token)을 먼저 입력해주세요.', 'error');
+    document.getElementById('tg-bot-token').focus();
+    return;
+  }
+  if (!chat_id) {
+    showToast('텔레그램 챗 ID(Chat ID)를 먼저 입력해주세요.', 'error');
+    document.getElementById('tg-chat-id').focus();
+    return;
+  }
+
+  const origText = testBtn ? testBtn.innerHTML : '';
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.innerHTML = '<span>⏳</span> 스마트폰으로 전송 중...';
+  }
 
   try {
-    const res = await fetch('/api/sync/config', {
+    const res = await fetch('/api/telegram/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, enabled })
+      body: JSON.stringify({ bot_token, chat_id })
     });
     const data = await res.json();
     if (data.success) {
-      showToast('구글 동기화 설정이 저장되고 동기화되었습니다!');
-      closeModal('cloudSyncModal');
-      await loadAccounts();
+      showToast('스마트폰 텔레그램으로 테스트 메시지가 발송되었습니다! 🔔', 'success');
+      const stEl = document.getElementById('tg-modal-status-text');
+      if (stEl) {
+        stEl.textContent = '연동 성공 (Active)';
+        stEl.style.color = 'var(--profit-green)';
+      }
+      const timeEl = document.getElementById('tg-modal-last-time');
+      if (timeEl) timeEl.textContent = new Date().toLocaleString();
+      const statusEl = document.getElementById('tg-modal-last-status');
+      if (statusEl) statusEl.textContent = 'SUCCESS';
     } else {
-      showToast(`동기화 실패: ${data.message}`, 'error');
+      showToast(`발송 실패: ${data.message}`, 'error');
     }
   } catch (e) {
-    showToast('설정 저장 실패', 'error');
+    showToast(`전송 오류: ${e.message}`, 'error');
+  } finally {
+    if (testBtn) {
+      testBtn.disabled = false;
+      testBtn.innerHTML = origText;
+    }
+  }
+}
+
+async function saveActiveSettings() {
+  if (currentSettingTab === 'tg') {
+    // 텔레그램 설정 저장
+    const bot_token = document.getElementById('tg-bot-token').value.trim();
+    const chat_id = document.getElementById('tg-chat-id').value.trim();
+    const enabled = document.getElementById('tg-enabled-check').checked;
+
+    try {
+      const res = await fetch('/api/telegram/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bot_token, chat_id, enabled, notify_on_orders: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('텔레그램 알림 설정이 저장되었습니다!');
+        closeModal('cloudSyncModal');
+      } else {
+        showToast(`저장 실패: ${data.message}`, 'error');
+      }
+    } catch (e) {
+      showToast('설정 저장 실패', 'error');
+    }
+  } else {
+    // 구글 동기화 설정 저장
+    const url = document.getElementById('sync-gas-url').value.trim();
+    const enabled = document.getElementById('sync-enabled-check').checked;
+
+    try {
+      const res = await fetch('/api/sync/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, enabled })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('구글 동기화 설정이 저장되었습니다!');
+        closeModal('cloudSyncModal');
+        await loadAccounts();
+      } else {
+        showToast(`동기화 실패: ${data.message}`, 'error');
+      }
+    } catch (e) {
+      showToast('설정 저장 실패', 'error');
+    }
   }
 }
 

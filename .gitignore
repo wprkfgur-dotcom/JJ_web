@@ -41,6 +41,7 @@ app_code/data/market_data.db
 # accounts.json
 app_code/data/sessions.json
 app_code/data/users.json
+app_code/data/telegram_config.json
 
 # Operating System & IDE
 .DS_Store

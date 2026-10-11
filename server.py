@@ -65,6 +65,12 @@ from core.cloud_sync import (
     save_sync_config,
     test_connection
 )
+from core.telegram_notifier import (
+    get_telegram_config,
+    save_telegram_config,
+    send_test_notification,
+    notify_order_generation
+)
 import threading
 import time
 
@@ -218,6 +224,16 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(..., example="myid")
     password: str = Field(..., example="mypassword")
+
+class TelegramConfigRequest(BaseModel):
+    bot_token: str = Field(default="", example="123456789:ABCdef...")
+    chat_id: str = Field(default="", example="123456789")
+    enabled: bool = Field(default=True)
+    notify_on_orders: bool = Field(default=True)
+
+class TelegramTestRequest(BaseModel):
+    bot_token: Optional[str] = None
+    chat_id: Optional[str] = None
 
 
 def get_current_user(request: Request) -> Optional[dict]:
@@ -645,6 +661,24 @@ async def advance_account_day(acc_id: str, request: Request):
     res = am.advance_next_day(acc_id)
     if not res:
         raise HTTPException(status_code=404, detail="Account not found")
+
+    # (예약) 매수/매도 주문표 생성 시 텔레그램 알림 자동 발송
+    try:
+        details = am.compute_account_details(res)
+        notify_order_generation(
+            account_name=res.get("name", "투자계좌"),
+            ticker=res.get("ticker", "SOXL"),
+            trade_date=str(details.get("target_order_date") or res.get("current_date", "")),
+            mode=str(details.get("mode", "Normal")),
+            buy_orders=details.get("buy_orders", []),
+            sell_orders=details.get("sell_orders", []),
+            netting_info=details.get("netting_info"),
+            total_asset=float(details.get("current_asset", 0.0)),
+            cash=float(details.get("current_cash", 0.0))
+        )
+    except Exception as ex:
+        print(f"[Telegram Alert Error] {ex}")
+
     return {"success": True, "account": res}
 
 
@@ -855,6 +889,46 @@ async def update_sync_config(req: SyncConfigRequest):
     save_sync_config(cfg)
     ok, msg = sync_local_with_drive(am)
     return {"success": ok, "message": msg, "config": cfg}
+
+
+# -------------------------------------------------------------------
+# 텔레그램 봇 알림 설정 & 테스트 API
+# -------------------------------------------------------------------
+@app.get("/api/telegram/config")
+async def get_tg_config():
+    """텔레그램 알림 설정 조회"""
+    cfg = get_telegram_config()
+    token = cfg.get("bot_token", "")
+    masked = f"{token[:6]}...{token[-4:]}" if len(token) > 12 else token
+    return {
+        "enabled": cfg.get("enabled", False),
+        "bot_token": token,
+        "masked_token": masked,
+        "chat_id": cfg.get("chat_id", ""),
+        "last_test_time": cfg.get("last_test_time"),
+        "last_test_status": cfg.get("last_test_status"),
+        "notify_on_orders": cfg.get("notify_on_orders", True)
+    }
+
+
+@app.post("/api/telegram/config")
+async def save_tg_config(req: TelegramConfigRequest):
+    """텔레그램 봇 토큰 및 챗 ID 저장"""
+    cfg = get_telegram_config()
+    cfg["bot_token"] = req.bot_token.strip()
+    cfg["chat_id"] = req.chat_id.strip()
+    cfg["enabled"] = req.enabled
+    cfg["notify_on_orders"] = req.notify_on_orders
+    save_telegram_config(cfg)
+    return {"success": True, "message": "텔레그램 설정이 성공적으로 저장되었습니다."}
+
+
+@app.post("/api/telegram/test")
+async def test_tg_message(req: TelegramTestRequest):
+    """텔레그램 연동 테스트 메시지 발송"""
+    ok, msg = send_test_notification(bot_token=req.bot_token, chat_id=req.chat_id)
+    return {"success": ok, "message": msg}
+
 
 
 def background_cloud_sync_worker():
