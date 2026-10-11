@@ -364,8 +364,9 @@
             <div class="chips-row">
               <button type="button" class="chip-btn" onclick="quickFillBacktest('SOXL')">SOXL</button>
               <button type="button" class="chip-btn" onclick="quickFillBacktest('TQQQ')">TQQQ</button>
-              <button type="button" class="chip-btn" onclick="quickFillBacktest('SCHD')">SCHD</button>
               <button type="button" class="chip-btn" onclick="quickFillBacktest('QLD')">QLD</button>
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('SSO')">SSO</button>
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('SCHD')">SCHD</button>
               <button type="button" class="chip-btn" onclick="quickFillBacktest('UPRO')">UPRO</button>
             </div>
           </div>
@@ -410,6 +411,10 @@
           <label class="checkbox-label">
             <input type="checkbox" id="strat-vr" checked>
             <span>VR 5.0 (밸류리밸런싱)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="strat-puddle" checked>
+            <span>🌊 <strong>웅덩이 매매법</strong> (이평선 & RSI 바닥 분할매수)</span>
           </label>
           <label class="checkbox-label">
             <input type="checkbox" id="strat-bnh" checked>

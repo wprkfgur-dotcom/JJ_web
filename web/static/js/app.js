@@ -1192,6 +1192,7 @@ async function runBacktest() {
   if (document.getElementById('strat-jj').checked) strategies.push('종종이 기본전략');
   if (document.getElementById('strat-inf').checked) strategies.push('무한매수법 v4.0');
   if (document.getElementById('strat-vr').checked) strategies.push('VR 5.0 (밸류리밸런싱)');
+  if (document.getElementById('strat-puddle')?.checked) strategies.push('웅덩이 매매법');
   if (document.getElementById('strat-bnh').checked) strategies.push(`${ticker} 단순보유(B&H)`);
 
   if (strategies.length === 0) {
@@ -1283,6 +1284,7 @@ function getStrategyColor(name) {
   if (name.includes('종종이')) return '#06b6d4'; // Cyan
   if (name.includes('무한')) return '#3b82f6';   // Blue
   if (name.includes('VR')) return '#f59e0b';     // Amber
+  if (name.includes('웅덩이')) return '#10b981'; // Emerald Green
   return '#94a3b8';                             // Muted Gray (B&H)
 }
 

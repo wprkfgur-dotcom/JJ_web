@@ -762,8 +762,8 @@ async def run_backtest_simulation(req: BacktestRequest):
     """
     ticker_clean = req.ticker.strip().upper()
     try:
-        # 시세 데이터 수집 (야후 파이낸스 & 로컬 SQLite 캐시) - 배당 재투자(Total Return / 수정주가) 옵션 지원
-        df_market = fetch_market_data(ticker_clean, req.start_date, req.end_date, warmup_days=50, use_adj_close=req.use_adj_close)
+        # 시세 데이터 수집 (야후 파이낸스 & 로컬 SQLite 캐시) - 웅덩이 매매법(120일선) 지원을 위해 warmup_days=180 적용
+        df_market = fetch_market_data(ticker_clean, req.start_date, req.end_date, warmup_days=180, use_adj_close=req.use_adj_close)
         if df_market.empty:
             raise HTTPException(status_code=400, detail=f"[{ticker_clean}] 기간 내 시세 데이터를 가져올 수 없습니다.")
 
