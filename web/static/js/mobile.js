@@ -3,8 +3,12 @@
  * Optimized for Mobile Safari & Android Chrome
  */
 
+// PC 버전과 동일한 저장 키를 사용하여 로그인 세션을 공유한다.
+const M_TOKEN_KEY = 'jj_auth_token';
+const M_USER_KEY = 'jj_auth_user';
+
 const mState = {
-  token: localStorage.getItem('jj_token') || '',
+  token: localStorage.getItem(M_TOKEN_KEY) || sessionStorage.getItem(M_TOKEN_KEY) || '',
   user: null,
   portfolio: null,
   accounts: [],
@@ -62,9 +66,9 @@ async function checkAuth() {
     const res = await mApi('/api/auth/me');
     if (!res.ok) throw new Error();
     const data = await res.json();
+    if (!data.authenticated || !data.user) throw new Error();
     mState.user = data.user;
     showAppView();
-    loadDashboard();
     loadAccounts();
     loadSettings();
   } catch (e) {
@@ -86,10 +90,6 @@ function showAppView() {
   if (mState.user) {
     const nameEl = document.getElementById('m-header-user-name');
     if (nameEl) nameEl.textContent = mState.user.username;
-    if (mState.user.role === 'admin') {
-      const adminTab = document.getElementById('m-admin-settings-tab');
-      if (adminTab) adminTab.style.display = 'block';
-    }
   }
 }
 
@@ -105,14 +105,14 @@ async function handleMobileLogin(e) {
       body: JSON.stringify({ username: u, password: p })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '로그인 실패');
+    if (!res.ok || !data.success) throw new Error(data.detail || data.message || '로그인 실패');
     
-    mState.token = data.access_token;
+    mState.token = data.token;
     mState.user = data.user;
-    localStorage.setItem('jj_token', data.access_token);
+    localStorage.setItem(M_TOKEN_KEY, data.token);
+    localStorage.setItem(M_USER_KEY, JSON.stringify(data.user));
     mToast('로그인 성공!');
     showAppView();
-    loadDashboard();
     loadAccounts();
     loadSettings();
   } catch (err) {
@@ -121,7 +121,10 @@ async function handleMobileLogin(e) {
 }
 
 function mLogout() {
-  localStorage.removeItem('jj_token');
+  [localStorage, sessionStorage].forEach(s => {
+    s.removeItem(M_TOKEN_KEY);
+    s.removeItem(M_USER_KEY);
+  });
   mState.token = '';
   mState.user = null;
   mToast('로그아웃 되었습니다.');
@@ -156,17 +159,9 @@ function mSwitchTab(tabName) {
 // =====================================================================
 // Dashboard
 // =====================================================================
+// 대시보드와 계좌 목록은 동일한 /api/accounts 응답을 공유한다.
 async function loadDashboard() {
-  try {
-    const res = await mApi('/api/portfolio/summary');
-    if (!res.ok) return;
-    const data = await res.json();
-    mState.portfolio = data.portfolio;
-    mState.accounts = data.accounts || [];
-    renderDashboard();
-  } catch (e) {
-    console.error('대시보드 로드 오류:', e);
-  }
+  await loadAccounts();
 }
 
 function renderDashboard() {
@@ -234,7 +229,9 @@ async function loadAccounts() {
     const res = await mApi('/api/accounts');
     if (!res.ok) return;
     const data = await res.json();
+    mState.portfolio = data.portfolio;
     mState.accounts = data.accounts || [];
+    renderDashboard();
     renderAccountsView();
   } catch (e) {
     console.error('계좌 로드 오류:', e);
@@ -292,12 +289,12 @@ function renderAccountDetail(data) {
   const isProfit = (det.total_profit || 0) >= 0;
   profitEl.innerHTML = `
     <span style="color:${isProfit ? 'var(--m-profit-green)' : 'var(--m-loss-red)'}">
-      ${isProfit ? '▲' : '▼'} ${mFmt.usd(det.total_profit)} (${mFmt.pct(det.return_pct)})
+      ${isProfit ? '▲' : '▼'} ${mFmt.usd(det.total_profit)} (${mFmt.pct(det.total_return_pct)})
     </span>
   `;
   
   document.getElementById('m-det-cash').textContent = mFmt.usd(det.current_cash);
-  document.getElementById('m-det-hold').textContent = `${mFmt.num(det.current_holdings)} 주`;
+  document.getElementById('m-det-hold').textContent = `${mFmt.num(det.current_hold)} 주`;
   document.getElementById('m-det-price').textContent = mFmt.usd(det.current_price);
   document.getElementById('m-det-date').textContent = det.target_order_date || acc.current_date;
   
@@ -318,6 +315,16 @@ function mSwitchDetailSubtab(subtab) {
   if (subtab === 'unsold') renderMobileUnsold(container, data);
   if (subtab === 'records') renderMobileRecords(container, data);
   if (subtab === 'adjustments') renderMobileAdjustments(container, data);
+}
+
+// 주문 항목은 영문/한글 키가 혼재하므로 한 곳에서 정규화한다.
+function mNormOrder(o) {
+  const price = Number(o.price ?? o['주문단가']) || 0;
+  const qty = Number(o.qty ?? o.shares ?? o['주문수량']) || 0;
+  const amount = Number(o.amount ?? o['예상금액']) || price * qty;
+  const label = o['주문유형'] || o.type || '';
+  const memo = o['비고'] || o.memo || o['체결조건'] || o['구분'] || o['호가단계'] || '';
+  return { price, qty, amount, label, memo };
 }
 
 function renderMobileOrders(container, data) {
@@ -346,17 +353,20 @@ function renderMobileOrders(container, data) {
   if (buyOrders.length === 0) {
     html += `<div style="color:var(--m-text-muted);font-size:0.775rem;padding:0.5rem 0;">당일 매수 주문이 없습니다.</div>`;
   } else {
-    html += buyOrders.map(o => `
+    html += buyOrders.map(raw => {
+      const o = mNormOrder(raw);
+      return `
       <div class="m-order-card buy">
         <div>
-          <div class="m-order-type">${o.type || '매수'} [${o.order_type || 'LOC'}]</div>
-          <div class="m-order-detail">${mFmt.num(o.qty)}주 · 소요예상 ${mFmt.usd(o.amount || (o.qty * o.price))}</div>
+          <div class="m-order-type">${o.label || '매수'}${o.memo ? ` [${o.memo}]` : ''}</div>
+          <div class="m-order-detail">${mFmt.num(o.qty)}주 · 소요예상 ${mFmt.usd(o.amount)}</div>
         </div>
         <div class="m-order-price" style="color:var(--m-accent-blue);">
           ${mFmt.usd(o.price)}
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
   
   // 매도 주문
@@ -364,17 +374,20 @@ function renderMobileOrders(container, data) {
   if (sellOrders.length === 0) {
     html += `<div style="color:var(--m-text-muted);font-size:0.775rem;padding:0.5rem 0;">당일 매도 주문이 없습니다.</div>`;
   } else {
-    html += sellOrders.map(o => `
+    html += sellOrders.map(raw => {
+      const o = mNormOrder(raw);
+      return `
       <div class="m-order-card sell">
         <div>
-          <div class="m-order-type">지정가 매도 [${o.target_type || '목표가'}]</div>
-          <div class="m-order-detail">${mFmt.num(o.qty)}주 · 예상회수 ${mFmt.usd(o.amount || (o.qty * o.price))}</div>
+          <div class="m-order-type">${o.label || '지정가 매도'}${o.memo ? ` [${o.memo}]` : ''}</div>
+          <div class="m-order-detail">${mFmt.num(o.qty)}주 · 예상회수 ${mFmt.usd(o.amount)}</div>
         </div>
         <div class="m-order-price" style="color:var(--m-loss-red);">
           ${mFmt.usd(o.price)}
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
   
   container.innerHTML = html;
@@ -388,18 +401,22 @@ function renderMobileUnsold(container, data) {
   }
   
   container.innerHTML = lots.map((lot, idx) => {
-    const profit = (data.details?.current_price - lot.price) * lot.qty;
-    const profitPct = ((data.details?.current_price - lot.price) / lot.price) * 100;
-    const isP = profit >= 0;
+    // 슬롯 필드: date(매수일), R(수량), U(목표가), hold_days. 매수가는 별도 필드가 없을 수 있다.
+    const qty = Number(lot.R ?? lot.qty) || 0;
+    const target = Number(lot.U ?? lot.target_price) || 0;
+    const buyPrice = Number(lot.price ?? lot.buy_price) || 0;
+    const cur = Number(data.details?.current_price) || 0;
+    const profitPct = buyPrice > 0 ? ((cur - buyPrice) / buyPrice) * 100 : 0;
+    const isP = profitPct >= 0;
     return `
       <div style="background:rgba(15,23,42,0.7);border:1px solid var(--m-border-subtle);border-radius:8px;padding:0.75rem;margin-bottom:0.5rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:700;font-size:0.825rem;color:#fff;">#${idx+1} ${lot.date || ''} (${lot.qty}주)</span>
-          <span class="m-badge ${isP ? 'm-badge-profit' : 'm-badge-loss'}">${mFmt.pct(profitPct)}</span>
+          <span style="font-weight:700;font-size:0.825rem;color:#fff;">#${idx+1} ${lot.date || ''} (${qty}주)</span>
+          ${buyPrice > 0 ? `<span class="m-badge ${isP ? 'm-badge-profit' : 'm-badge-loss'}">${mFmt.pct(profitPct)}</span>` : ''}
         </div>
         <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--m-text-secondary);margin-top:0.35rem;">
-          <span>매수가: ${mFmt.usd(lot.price)}</span>
-          <span>목표가: ${mFmt.usd(lot.target_price)}</span>
+          <span>보유일: ${lot.hold_days ?? '-'}일</span>
+          <span>목표가: ${mFmt.usd(target)}</span>
         </div>
       </div>
     `;
@@ -416,11 +433,11 @@ function renderMobileRecords(container, data) {
   container.innerHTML = records.slice().reverse().map(r => `
     <div style="background:rgba(15,23,42,0.6);border:1px solid var(--m-border-subtle);border-radius:8px;padding:0.7rem;margin-bottom:0.5rem;font-size:0.775rem;">
       <div style="display:flex;justify-content:space-between;font-weight:700;color:#fff;">
-        <span>${r.date} (종가: ${mFmt.usd(r.close_price)})</span>
-        <span>자산: ${mFmt.usd(r.asset)}</span>
+        <span>${r.Date} (종가: ${mFmt.usd(r.Close)})</span>
+        <span>자산: ${mFmt.usd(r.Asset)}</span>
       </div>
       <div style="color:var(--m-text-secondary);margin-top:0.25rem;">
-        매수 ${r.buy_qty || 0}주 · 매도 ${r.sell_qty || 0}주 · 현금 ${mFmt.usd(r.cash)}
+        매수 ${r.R || 0}주 · 매도 ${r.SellQty || 0}주 · 현금 ${mFmt.usd(r.Cash)}
       </div>
     </div>
   `).join('');
@@ -461,6 +478,11 @@ async function mAdvanceDay() {
   } catch (e) {
     mToast(e.message, true);
   }
+}
+
+// 계좌 생성은 PC 버전에서 지원한다.
+function mOpenCreateAccountModal() {
+  mToast('계좌 등록은 PC 버전에서 이용해주세요. (?view=pc)', true);
 }
 
 function mOpenSettlementModal() {
@@ -674,10 +696,10 @@ async function loadSettings() {
       document.getElementById('m-tg-enabled').checked = tg.enabled;
     }
     
-    const csRes = await mApi('/api/cloud-sync/config');
+    const csRes = await mApi('/api/sync/status');
     if (csRes.ok) {
       const cs = await csRes.json();
-      document.getElementById('m-cs-url').value = cs.script_url || '';
+      document.getElementById('m-cs-url').value = cs.url || '';
     }
     
     const atRes = await mApi('/api/autotrade/status');
@@ -728,14 +750,14 @@ async function mSyncGoogleDrive() {
   const url = document.getElementById('m-cs-url').value.trim();
   try {
     if (url) {
-      await mApi('/api/cloud-sync/config', {
+      await mApi('/api/sync/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script_url: url })
+        body: JSON.stringify({ url, enabled: true })
       });
     }
     mToast('구글 드라이브 동기화 진행 중...');
-    const res = await mApi('/api/cloud-sync/execute', { method: 'POST' });
+    const res = await mApi('/api/sync/pull', { method: 'POST' });
     const d = await res.json();
     if (d.success) {
       mToast('구글 드라이브 동기화 성공!');
