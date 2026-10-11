@@ -149,10 +149,10 @@ function showAppView() {
       }
     }
 
-    // 관리자(Admin) 전용 회원 관리 탭 노출 여부 제어
-    const adminTabBtn = document.getElementById('tab-btn-admin');
-    if (adminTabBtn) {
-      adminTabBtn.style.display = (state.user && state.user.role === 'admin') ? 'inline-flex' : 'none';
+    // 관리자(Admin) 전용 회원 관리 설정 탭 노출 여부 제어
+    const adminSettingBtn = document.getElementById('btn-setting-tab-admin');
+    if (adminSettingBtn) {
+      adminSettingBtn.style.display = (state.user && state.user.role === 'admin') ? 'inline-flex' : 'none';
     }
   }
 }
@@ -418,7 +418,6 @@ async function loadServerStatus() {
       badgeEl.innerHTML = `
         <span class="status-dot ${market.badge}"></span>
         <span>${market.status}</span>
-        <span style="color:var(--text-muted);margin-left:4px;">(KST ${market.kst.substring(11, 16)})</span>
       `;
     }
 
@@ -1464,24 +1463,40 @@ let currentSettingTab = 'tg';
 
 function switchSettingTab(tab) {
   currentSettingTab = tab;
-  const btnTg = document.getElementById('btn-setting-tab-tg');
-  const btnSync = document.getElementById('btn-setting-tab-sync');
-  const panelTg = document.getElementById('setting-panel-tg');
-  const panelSync = document.getElementById('setting-panel-sync');
+  const tabs = ['tg', 'sync', 'autotrade', 'admin'];
 
-  if (btnTg) {
-    btnTg.classList.toggle('active', tab === 'tg');
-    if (tab !== 'tg') btnTg.blur();
+  tabs.forEach(t => {
+    const btn = document.getElementById(`btn-setting-tab-${t}`);
+    const panel = document.getElementById(`setting-panel-${t}`);
+    const isActive = (tab === t);
+
+    if (btn) {
+      btn.classList.toggle('active', isActive);
+      if (!isActive) btn.blur();
+    }
+    if (panel) {
+      panel.style.display = isActive ? 'block' : 'none';
+    }
+  });
+
+  const saveBtn = document.getElementById('btn-save-settings');
+  if (saveBtn) {
+    saveBtn.style.display = (tab === 'tg' || tab === 'sync') ? 'inline-flex' : 'none';
   }
-  if (btnSync) {
-    btnSync.classList.toggle('active', tab === 'sync');
-    if (tab !== 'sync') btnSync.blur();
+
+  if (tab === 'admin') {
+    loadAdminUsers();
+  } else if (tab === 'autotrade') {
+    loadServerStatus();
   }
-  if (panelTg) panelTg.style.display = tab === 'tg' ? 'block' : 'none';
-  if (panelSync) panelSync.style.display = tab === 'sync' ? 'block' : 'none';
 }
 
 async function openSyncSettingsModal() {
+  const adminBtn = document.getElementById('btn-setting-tab-admin');
+  if (adminBtn) {
+    adminBtn.style.display = (state.user && state.user.role === 'admin') ? 'inline-flex' : 'none';
+  }
+
   switchSettingTab('tg'); // 기본으로 텔레그램 알림 탭 활성화
   document.getElementById('cloudSyncModal').classList.add('active');
 
