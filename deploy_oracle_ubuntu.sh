@@ -26,17 +26,38 @@ fi
 ./venv/bin/pip install --upgrade pip
 ./venv/bin/pip install -r requirements.txt
 
-# 3. 우분투 OS 방화벽 8000 포트 개방
-echo "🛡️  [3/5] 방화벽 포트 8000 개방 설정..."
+# 3. 우분투 OS 방화벽 및 Nginx 리버스 프록시(포트 80 -> 8000) 설정
+echo "🛡️  [3/6] Nginx 리버스 프록시 및 방화벽 설정..."
+sudo apt-get install -y nginx
+sudo bash -c "cat << 'EOF' > /etc/nginx/sites-available/default
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF"
+sudo nginx -t
+sudo systemctl restart nginx
+sudo systemctl enable nginx
+
 if command -v ufw &> /dev/null; then
+    sudo ufw allow 80/tcp || true
     sudo ufw allow 8000/tcp || true
 fi
-# 오라클 리눅스/우분투 기본 iptables 규칙 추가
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT || true
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT || true
 sudo netfilter-persistent save || true
 
 # 4. systemd 서비스 등록 (서버 재부팅 시 24시간 자동 실행)
-echo "⚙️  [4/5] systemd 백그라운드 서비스 등록 (jj_invest.service)..."
+echo "⚙️  [4/6] systemd 백그라운드 서비스 등록 (jj_invest.service)..."
 SERVICE_FILE="/etc/systemd/system/jj_invest.service"
 
 sudo bash -c "cat <<EOF > $SERVICE_FILE
@@ -65,11 +86,12 @@ sudo systemctl restart jj_invest
 # 실행 권한 부여
 chmod +x run_server.sh update_server.sh deploy_oracle_ubuntu.sh
 
-# 5. 상태 확인
+# 6. 상태 확인
 echo "============================================================"
-echo "🎉 [5/5] 배포 완료! 서비스가 백그라운드에서 실행 중입니다."
+echo "🎉 [6/6] 배포 완료! 서비스가 백그라운드에서 실행 중입니다."
 echo "============================================================"
 echo "상태 확인: sudo systemctl status jj_invest"
 echo "로그 확인: sudo journalctl -u jj_invest -f"
-echo "웹 접속:   http://$(curl -s ifconfig.me || echo '오라클서버_공인IP'):8000"
+echo "웹 접속 (기본): http://$(curl -s ifconfig.me || echo '오라클서버_공인IP')"
+echo "웹 접속 (포트): http://$(curl -s ifconfig.me || echo '오라클서버_공인IP'):8000"
 echo "============================================================"
