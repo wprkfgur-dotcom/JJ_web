@@ -584,12 +584,18 @@ async function renderDashboardOrders(accounts) {
         continue;
       }
 
+// 주문 정보 정규화 헬퍼 (영문/한글 필드 호환)
+function parseOrderItem(o, defaultMemo = '') {
+  const p = o.price !== undefined ? Number(o.price) : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
+  const q = o.qty !== undefined ? Number(o.qty) : (o.shares !== undefined ? Number(o.shares) : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
+  const a = o.amount !== undefined ? Number(o.amount) : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
+  const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || o['호가단계'] || defaultMemo;
+  return { p, q, a, m };
+}
+
       // 매도 주문행
       sellOrders.forEach(o => {
-        const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
-        const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
-        const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
-        const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || '목표가 도달 시 청산';
+        const { p, q, a, m } = parseOrderItem(o, '목표가 도달 시 청산');
         const typeStr = o['주문유형'] || 'LOC 매도';
         rowsHtml += `
           <tr>
@@ -605,10 +611,7 @@ async function renderDashboardOrders(accounts) {
 
       // 매수 주문행
       buyOrders.forEach(o => {
-        const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
-        const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
-        const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
-        const m = o.비고 || o.memo || o['체결조건'] || o['호가단계'] || '분할 LOC 매수';
+        const { p, q, a, m } = parseOrderItem(o, '분할 LOC 매수');
         const typeStr = o['주문유형'] || 'LOC 매수';
         rowsHtml += `
           <tr>
@@ -847,10 +850,7 @@ function renderDetailSubTabs(data) {
         </thead>
         <tbody>
           ${sellList.map(o => {
-            const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
-            const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
-            const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
-            const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || '';
+            const { p, q, a, m } = parseOrderItem(o);
             const typeStr = o['주문유형'] || 'LOC 매도';
             return `
             <tr>
@@ -862,10 +862,7 @@ function renderDetailSubTabs(data) {
             </tr>
           `;}).join('')}
           ${buyList.map(o => {
-            const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
-            const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
-            const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
-            const m = o.비고 || o.memo || o['체결조건'] || o['호가단계'] || '';
+            const { p, q, a, m } = parseOrderItem(o);
             const typeStr = o['주문유형'] || 'LOC 매수';
             return `
             <tr>
