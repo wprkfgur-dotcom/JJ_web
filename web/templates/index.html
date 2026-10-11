@@ -19,51 +19,140 @@
 </head>
 <body>
 
-  <!-- Top Header Navigation -->
-  <header>
-    <div class="navbar-container">
-      <a href="#" class="brand" onclick="switchTab('dashboard'); return false;">
-        <div class="brand-icon">⚡</div>
-        <div class="brand-text">
-          <h1>JJ INVEST</h1>
-          <span>종종이 & 무한매수 운용 시스템</span>
-        </div>
-      </a>
+  <!-- =============================================================== -->
+  <!-- 0. LOGIN VIEW (초기 로그인 화면)                                -->
+  <!-- =============================================================== -->
+  <div id="login-view" class="login-view-wrapper">
+    <div class="login-bg-glow glow-1"></div>
+    <div class="login-bg-glow glow-2"></div>
+    
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-brand-icon">⚡</div>
+        <h2>JJ INVEST PRO</h2>
+        <p class="login-subtitle">종종이 3단계 LOC & 무한매수 자동 운용 시스템</p>
+      </div>
 
-      <!-- Navigation Tabs -->
-      <nav class="nav-tabs" role="tablist">
-        <button class="tab-btn active" data-tab="dashboard" id="tab-btn-dashboard">
-          <span>📊</span> 대시보드
-        </button>
-        <button class="tab-btn" data-tab="accounts" id="tab-btn-accounts">
-          <span>💼</span> 계좌 현황
-        </button>
-        <button class="tab-btn" data-tab="backtest" id="tab-btn-backtest">
-          <span>⚡</span> 백테스트
-        </button>
-        <button class="tab-btn" data-tab="guide" id="tab-btn-guide">
-          <span>📘</span> 전략 가이드
-        </button>
-        <button class="tab-btn" data-tab="autotrade" id="tab-btn-autotrade">
-          <span>🤖</span> 오라클 자동매매
-        </button>
-      </nav>
-
-      <!-- Right Header Actions (Cloud Sync & Market Status) -->
-      <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" id="btn-cloud-sync" onclick="triggerCloudSync()" title="구글 드라이브(GAS) 실시간 동기화">
-          <span>🔄</span> <span id="cloud-sync-label">구글 동기화</span>
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="openSyncSettingsModal()" title="동기화 설정">
-          <span>⚙️</span>
-        </button>
-        <div class="market-badge" id="market-badge">
-          <span class="status-dot closed"></span>
-          <span>상태 조회 중...</span>
+      <div class="login-info-banner">
+        <span style="font-size:1.1rem;">🔐</span>
+        <div>
+          <strong style="color:#93c5fd;">오라클 웹 서버 보안 세션 로그인</strong>
+          <p>등록된 사용자 계정(huxley)으로 로그인 시 연동 계좌를 자동으로 불러옵니다.</p>
         </div>
       </div>
+
+      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+        <div id="login-error-msg" class="login-error-box" style="display:none;"></div>
+
+        <div class="form-group" style="margin-bottom: 1.15rem;">
+          <label for="login-username">사용자 아이디 (User ID)</label>
+          <div class="input-with-icon">
+            <span class="input-icon">👤</span>
+            <input type="text" id="login-username" class="form-input" placeholder="아이디 입력 (huxley)" autocomplete="username" required value="huxley">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.15rem;">
+          <label for="login-password">비밀번호 (Password)</label>
+          <div class="input-with-icon">
+            <span class="input-icon">🔑</span>
+            <input type="password" id="login-password" class="form-input" placeholder="비밀번호 입력 (lee0320)" autocomplete="current-password" required value="lee0320">
+            <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility('login-password')" title="비밀번호 표시/숨김">👁️</button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.35rem; font-size: 0.825rem;">
+          <label class="checkbox-label" style="cursor: pointer; margin-bottom: 0;">
+            <input type="checkbox" id="login-remember" checked>
+            <span style="color: var(--text-secondary);">로그인 유지 (자동 로그인)</span>
+          </label>
+          <span style="color: var(--accent-cyan); font-size: 0.75rem;">연동 계정: huxley</span>
+        </div>
+
+        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block btn-lg" style="margin-bottom: 0.75rem;">
+          <span id="btn-login-text">🚀 로그인 및 내 계좌 연동</span>
+          <span id="btn-login-spinner" style="display:none;">⏳ 접속 중...</span>
+        </button>
+
+        <div class="login-divider">
+          <span>또는</span>
+        </div>
+
+        <button type="button" class="btn btn-secondary btn-block" onclick="quickFillAndLogin()" style="font-size:0.85rem;">
+          ⚡ Huxley 계정으로 1초 빠른 로그인
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <span>🔒 256-bit 보안 세션</span>
+        <span>•</span>
+        <span>오라클 클라우드 우분투 실시간 운용</span>
+      </div>
     </div>
-  </header>
+  </div>
+
+  <!-- =============================================================== -->
+  <!-- MAIN APP VIEW (로그인 성공 시 표시)                             -->
+  <!-- =============================================================== -->
+  <div id="app-view" style="display:none;">
+
+    <!-- Top Header Navigation -->
+    <header>
+      <div class="navbar-container">
+        <a href="#" class="brand" onclick="switchTab('dashboard'); return false;">
+          <div class="brand-icon">⚡</div>
+          <div class="brand-text">
+            <h1>JJ INVEST</h1>
+            <span>종종이 & 무한매수 운용 시스템</span>
+          </div>
+        </a>
+
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs" role="tablist">
+          <button class="tab-btn active" data-tab="dashboard" id="tab-btn-dashboard">
+            <span>📊</span> 대시보드
+          </button>
+          <button class="tab-btn" data-tab="accounts" id="tab-btn-accounts">
+            <span>💼</span> 계좌 현황
+          </button>
+          <button class="tab-btn" data-tab="backtest" id="tab-btn-backtest">
+            <span>⚡</span> 백테스트
+          </button>
+          <button class="tab-btn" data-tab="guide" id="tab-btn-guide">
+            <span>📘</span> 전략 가이드
+          </button>
+          <button class="tab-btn" data-tab="autotrade" id="tab-btn-autotrade">
+            <span>🤖</span> 오라클 자동매매
+          </button>
+        </nav>
+
+        <!-- Right Header Actions (User Badge, Cloud Sync, Market Status) -->
+        <div class="header-actions">
+          <!-- 사용자 프로필 및 계좌 연동 뱃지 -->
+          <div class="user-profile-badge" id="user-profile-badge">
+            <span class="user-avatar">👤</span>
+            <div class="user-meta">
+              <span class="user-name" id="user-display-name">huxley</span>
+              <span class="user-linked-badge" id="user-linked-badge">연동: 연습용 (SOXL)</span>
+            </div>
+            <button class="btn btn-secondary btn-xs btn-logout" onclick="handleLogout()" title="로그아웃">
+              로그아웃
+            </button>
+          </div>
+
+          <button class="btn btn-secondary btn-sm" id="btn-cloud-sync" onclick="triggerCloudSync()" title="구글 드라이브(GAS) 실시간 동기화">
+            <span>🔄</span> <span id="cloud-sync-label">구글 동기화</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="openSyncSettingsModal()" title="동기화 설정">
+            <span>⚙️</span>
+          </button>
+          <div class="market-badge" id="market-badge">
+            <span class="status-dot closed"></span>
+            <span>상태 조회 중...</span>
+          </div>
+        </div>
+      </div>
+    </header>
 
   <!-- Main Container -->
   <main>
@@ -606,6 +695,7 @@
       </div>
     </div>
   </div>
+  </div> <!-- /#app-view -->
 
   <!-- Toast 알림 컨테이너 -->
   <div class="toast-container" id="toast-container"></div>

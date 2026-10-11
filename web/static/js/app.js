@@ -5,6 +5,8 @@
 
 // 전역 상태
 const state = {
+  user: null,
+  token: null,
   currentTab: 'dashboard',
   portfolio: null,
   accounts: [],
@@ -28,9 +30,71 @@ const fmt = {
 };
 
 // -------------------------------------------------------------------
-// 초기화 및 이벤트 리스너
+// 사용자 인증 및 세션 제어
 // -------------------------------------------------------------------
+let appInitialized = false;
+let pollingInterval = null;
+
 document.addEventListener('DOMContentLoaded', () => {
+  checkAuthAndInit();
+});
+
+function checkAuthAndInit() {
+  const savedUser = localStorage.getItem('jj_auth_user') || sessionStorage.getItem('jj_auth_user');
+  const savedToken = localStorage.getItem('jj_auth_token') || sessionStorage.getItem('jj_auth_token');
+
+  if (savedUser && savedToken) {
+    try {
+      state.user = JSON.parse(savedUser);
+      state.token = savedToken;
+      showAppView();
+      initApp();
+      return;
+    } catch (e) {
+      console.warn('저장된 세션 파싱 오류:', e);
+      localStorage.removeItem('jj_auth_user');
+      localStorage.removeItem('jj_auth_token');
+      sessionStorage.removeItem('jj_auth_user');
+      sessionStorage.removeItem('jj_auth_token');
+    }
+  }
+
+  showLoginView();
+}
+
+function showLoginView() {
+  const loginView = document.getElementById('login-view');
+  const appView = document.getElementById('app-view');
+  if (loginView) loginView.style.display = 'flex';
+  if (appView) appView.style.display = 'none';
+
+  const unameInput = document.getElementById('login-username');
+  if (unameInput && !unameInput.value) unameInput.value = 'huxley';
+  const pwdInput = document.getElementById('login-password');
+  if (pwdInput && !pwdInput.value) pwdInput.value = 'lee0320';
+}
+
+function showAppView() {
+  const loginView = document.getElementById('login-view');
+  const appView = document.getElementById('app-view');
+  if (loginView) loginView.style.display = 'none';
+  if (appView) appView.style.display = 'block';
+
+  // 헤더 사용자 정보 갱신
+  if (state.user) {
+    const nameEl = document.getElementById('user-display-name');
+    if (nameEl) nameEl.textContent = state.user.name || state.user.username || 'huxley';
+    const linkedEl = document.getElementById('user-linked-badge');
+    if (linkedEl) {
+      linkedEl.textContent = '연동: 연습용 (SOXL)';
+    }
+  }
+}
+
+function initApp() {
+  if (appInitialized) return;
+  appInitialized = true;
+
   initTabs();
   initTickerRibbon();
   loadServerStatus();
@@ -38,13 +102,96 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCloudSyncStatus();
   initBacktestPresets();
 
-  // 15초마다 서버 및 시세 상태 폴링
-  setInterval(() => {
-    loadServerStatus();
-    loadAccounts(true);
-    loadCloudSyncStatus();
+  if (pollingInterval) clearInterval(pollingInterval);
+  pollingInterval = setInterval(() => {
+    if (state.user) {
+      loadServerStatus();
+      loadAccounts(true);
+      loadCloudSyncStatus();
+    }
   }, 15000);
-});
+}
+
+async function handleLoginSubmit(event) {
+  if (event) event.preventDefault();
+
+  const uname = document.getElementById('login-username').value.trim();
+  const pwd = document.getElementById('login-password').value.trim();
+  const remember = document.getElementById('login-remember').checked;
+  const errorBox = document.getElementById('login-error-msg');
+  const btnText = document.getElementById('btn-login-text');
+  const btnSpinner = document.getElementById('btn-login-spinner');
+  const submitBtn = document.getElementById('btn-login-submit');
+
+  errorBox.style.display = 'none';
+  btnText.style.display = 'none';
+  btnSpinner.style.display = 'inline';
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: uname, password: pwd })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.detail || '아이디 또는 비밀번호가 일치하지 않습니다.');
+    }
+
+    state.user = data.user;
+    state.token = data.token;
+
+    if (remember) {
+      localStorage.setItem('jj_auth_user', JSON.stringify(data.user));
+      localStorage.setItem('jj_auth_token', data.token);
+    } else {
+      sessionStorage.setItem('jj_auth_user', JSON.stringify(data.user));
+      sessionStorage.setItem('jj_auth_token', data.token);
+    }
+
+    showAppView();
+    initApp();
+    showToast(`환영합니다, ${data.user.name || uname}님! 내 계좌가 정상 연동되었습니다.`, 'success');
+  } catch (err) {
+    errorBox.textContent = '⚠️ ' + err.message;
+    errorBox.style.display = 'flex';
+  } finally {
+    btnText.style.display = 'inline';
+    btnSpinner.style.display = 'none';
+    submitBtn.disabled = false;
+  }
+}
+
+function quickFillAndLogin() {
+  document.getElementById('login-username').value = 'huxley';
+  document.getElementById('login-password').value = 'lee0320';
+  handleLoginSubmit();
+}
+
+function togglePasswordVisibility(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+async function handleLogout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (e) {}
+  localStorage.removeItem('jj_auth_user');
+  localStorage.removeItem('jj_auth_token');
+  sessionStorage.removeItem('jj_auth_user');
+  sessionStorage.removeItem('jj_auth_token');
+  state.user = null;
+  state.token = null;
+  appInitialized = false;
+  if (pollingInterval) clearInterval(pollingInterval);
+  showLoginView();
+  showToast('안전하게 로그아웃되었습니다.');
+}
+
 
 function initTabs() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -195,6 +342,8 @@ function renderAccountsGrid(accounts) {
   }
 
   container.innerHTML = accounts.map(acc => {
+    const isOwner = acc.is_my_account || acc.owner === 'huxley';
+    const ownerBadge = isOwner ? '<span class="badge badge-owner">⭐ 내 연동계좌 (huxley)</span>' : '';
     const modeClass = acc.mode === 'Safe' ? 'badge-mode-safe' : (acc.mode === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
     const stateClass = acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done';
     const stateText = acc.operational_state === 'WAITING_FOR_FILL' ? '장전 대기' : '정산 완료';
@@ -207,6 +356,7 @@ function renderAccountsGrid(accounts) {
             <div class="card-title">
               <h3>${acc.name}</h3>
               <div style="margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap;">
+                ${ownerBadge}
                 <span class="badge badge-ticker">${acc.ticker}</span>
                 <span class="badge ${modeClass}">${acc.mode}</span>
                 <span class="badge ${stateClass}">${stateText}</span>

@@ -208,6 +208,10 @@ class BacktestRequest(BaseModel):
     end_date: str = Field(default="2026-10-09")
     strategies: List[str] = Field(default=["종종이 기본전략", "무한매수법 v4.0", "SOXL 단순보유(B&H)"])
 
+class LoginRequest(BaseModel):
+    username: str = Field(..., example="huxley")
+    password: str = Field(..., example="lee0320")
+
 
 # -------------------------------------------------------------------
 # HTML 메인 페이지 라우트
@@ -218,6 +222,60 @@ async def serve_index():
     if not index_file.exists():
         raise HTTPException(status_code=404, detail="Frontend index.html not found")
     return FileResponse(index_file)
+
+
+# -------------------------------------------------------------------
+# 사용자 인증 (Auth) API 라우트
+# -------------------------------------------------------------------
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    """사용자 로그인 처리 (계정: huxley / PW: lee0320) 및 전용 계좌 연동"""
+    username = req.username.strip()
+    password = req.password.strip()
+
+    if username.lower() == "huxley" and password == "lee0320":
+        token = "jj_token_huxley_auth_session_9941"
+        accounts = am.load_accounts()
+        linked = [a["id"] for a in accounts if a.get("owner") == "huxley" or a["id"] == "acc_20261001203651_7121"]
+        return {
+            "success": True,
+            "token": token,
+            "user": {
+                "username": "huxley",
+                "name": "Huxley",
+                "role": "Master Trader",
+                "linked_accounts": linked,
+                "login_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        }
+    raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+
+
+@app.get("/api/auth/me")
+async def check_current_user(request: Request):
+    """현재 로그인 세션 검증 및 연동 계좌 상태 확인"""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "").strip()
+    
+    if "huxley" in token or token == "jj_token_huxley_auth_session_9941":
+        accounts = am.load_accounts()
+        linked = [a["id"] for a in accounts if a.get("owner") == "huxley" or a["id"] == "acc_20261001203651_7121"]
+        return {
+            "authenticated": True,
+            "user": {
+                "username": "huxley",
+                "name": "Huxley",
+                "role": "Master Trader",
+                "linked_accounts": linked
+            }
+        }
+    return {"authenticated": False}
+
+
+@app.post("/api/auth/logout")
+async def logout():
+    """로그아웃 처리"""
+    return {"success": True, "message": "성공적으로 로그아웃되었습니다."}
 
 
 # -------------------------------------------------------------------
@@ -299,6 +357,8 @@ async def list_accounts():
 
             processed_list.append({
                 "id": acc["id"],
+                "owner": acc.get("owner", "huxley"),
+                "is_my_account": (acc.get("owner", "huxley") == "huxley"),
                 "name": acc["name"],
                 "ticker": acc["ticker"],
                 "strategy": acc["strategy"],
@@ -326,6 +386,8 @@ async def list_accounts():
             seed = float(acc.get("initial_seed", 0.0))
             processed_list.append({
                 "id": acc["id"],
+                "owner": acc.get("owner", "huxley"),
+                "is_my_account": (acc.get("owner", "huxley") == "huxley"),
                 "name": acc["name"],
                 "ticker": acc["ticker"],
                 "strategy": acc["strategy"],
