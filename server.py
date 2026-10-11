@@ -727,8 +727,8 @@ async def run_backtest_simulation(req: BacktestRequest):
     """
     ticker_clean = req.ticker.strip().upper()
     try:
-        # 시세 데이터 수집 (야후 파이낸스 & 로컬 SQLite 캐시)
-        df_market = fetch_market_data(ticker_clean, req.start_date, req.end_date, warmup_days=60)
+        # 시세 데이터 수집 (야후 파이낸스 & 로컬 SQLite 캐시) - 모바일 앱과 100% 동일하게 warmup_days=50 적용
+        df_market = fetch_market_data(ticker_clean, req.start_date, req.end_date, warmup_days=50)
         if df_market.empty:
             raise HTTPException(status_code=400, detail=f"[{ticker_clean}] 기간 내 시세 데이터를 가져올 수 없습니다.")
 

@@ -1080,18 +1080,25 @@ function initBacktestPresets() {
   setBacktestPeriodByYears(3);
 }
 
-function setBacktestPeriodByYears(years) {
-  const end = new Date();
-  const start = new Date();
-  start.setFullYear(end.getFullYear() - years);
+function formatLocalDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
-  document.getElementById('bt-start-date').value = start.toISOString().substring(0, 10);
-  document.getElementById('bt-end-date').value = end.toISOString().substring(0, 10);
+function setBacktestPeriodByYears(years) {
+  const now = new Date();
+  const days = years * 365; // 모바일 앱(timedelta(days=365*years))과 100% 동일한 일수 계산
+  const start = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+
+  document.getElementById('bt-start-date').value = formatLocalDate(start);
+  document.getElementById('bt-end-date').value = formatLocalDate(now);
 }
 
 async function runBacktest() {
   const ticker = document.getElementById('bt-ticker').value.trim().toUpperCase();
-  const capital = parseFloat(document.getElementById('bt-capital').value) || 100000;
+  const capital = parseFloat(document.getElementById('bt-capital').value) || 200000;
   const startDate = document.getElementById('bt-start-date').value;
   const endDate = document.getElementById('bt-end-date').value;
 
