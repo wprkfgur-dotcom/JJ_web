@@ -326,22 +326,28 @@ async function handleLogout() {
 
 
 function initTabs() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.nav-tabs .tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = btn.dataset.tab;
-      switchTab(target);
+      if (target) switchTab(target);
     });
   });
 }
 
 function switchTab(tabId) {
+  if (!tabId) return;
   state.currentTab = tabId;
-  document.querySelectorAll('.tab-btn').forEach(b => {
+  document.querySelectorAll('.nav-tabs .tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === tabId);
   });
   document.querySelectorAll('.tab-panel').forEach(p => {
     p.classList.toggle('active', p.id === `tab-${tabId}`);
   });
+
+  // '계좌 현황' 탭 선택 시 기본적으로 계좌 목록(카드 그리드) 화면 표시
+  if (tabId === 'accounts') {
+    closeAccountDetailView(false);
+  }
 
   if (tabId === 'admin') {
     loadAdminUsers();
@@ -349,6 +355,10 @@ function switchTab(tabId) {
 
   if (tabId === 'backtest' && !state.backtestResults) {
     // 백테스트 탭 처음 열릴 때 빠른 실행 제안
+  }
+
+  if (tabId === 'dashboard' && state.charts.allocation) {
+    state.charts.allocation.resize();
   }
 }
 
@@ -688,32 +698,108 @@ function renderAllocationDonut(accounts) {
 }
 
 // -------------------------------------------------------------------
-// 계좌 상세 모달
+// 계좌 상세 인페이지 뷰 & 뒤로가기 제어
 // -------------------------------------------------------------------
-async function openAccountDetailModal(accId) {
+async function openAccountDetailModal(accId, pushHistory = true) {
   try {
     const res = await authFetch(`/api/accounts/${accId}`);
     const data = await res.json();
     state.activeAccountDetail = data;
 
-    const modal = document.getElementById('accountDetailModal');
+    // 메인화면 내 계좌 상세 뷰로 전환 (모달 팝업 대신 인페이지)
+    const listView = document.getElementById('account-list-view');
+    const detailView = document.getElementById('account-detail-view');
+    if (listView) listView.style.display = 'none';
+    if (detailView) detailView.style.display = 'block';
+
     const headerTitle = document.getElementById('modal-acc-title');
-    headerTitle.textContent = `${data.account.name} (${data.account.ticker} - ${data.account.strategy})`;
+    const subTitleEl = document.getElementById('modal-acc-subtitle');
+    const actionsEl = document.getElementById('detail-header-actions');
+    const acc = data.account;
 
-    // 서브 탭 렌더링
+    if (headerTitle) {
+      headerTitle.textContent = `${acc.name} (${acc.ticker})`;
+    }
+
+    if (subTitleEl) {
+      const modeText = acc.mode || 'Normal';
+      const modeClass = acc.mode === 'Safe' ? 'badge-mode-safe' : (acc.mode === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
+      subTitleEl.innerHTML = `
+        <span class="badge badge-ticker">${acc.ticker}</span>
+        <span class="badge ${modeClass}">${modeText}</span>
+        <span style="color: var(--text-secondary); margin-left: 6px;">${acc.strategy}</span>
+        <span style="color: var(--text-muted); margin-left: 8px;">| 운용 기준일: <strong>${acc.current_date}</strong></span>
+      `;
+    }
+
+    if (actionsEl) {
+      actionsEl.innerHTML = `
+        <button class="btn btn-secondary btn-sm" onclick="advanceAccountDay('${acc.id}')" title="다음 거래일로 진행">
+          <span>⏩</span> Next Day
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openSettlementModal('${acc.id}')" title="당일 종가 및 체결 정산">
+          <span>📝</span> 종가 정산
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openAdjustmentModal('${acc.id}')" title="입금 또는 출금 기록">
+          <span>💰</span> 입출금
+        </button>
+      `;
+    }
+
+    // 서브 탭 렌더링 및 첫 서브탭 활성화
     renderDetailSubTabs(data);
-    switchDetailSubTab('orders');
+    switchDetailSubTab(state.activeDetailSubTab || 'orders');
 
-    modal.classList.add('active');
+    // 브라우저 뒤로가기(popstate) 연동
+    if (pushHistory) {
+      try {
+        history.pushState({ view: 'account-detail', accId: accId }, '', `#account-${accId}`);
+      } catch (e) {}
+    }
+
+    // 화면 상단으로 스크롤 이동
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
+    console.error('계좌 상세 로드 실패:', e);
     showToast('계좌 상세 정보를 불러오지 못했습니다.', 'error');
   }
 }
+
+function closeAccountDetailView(triggerHistoryBack = true) {
+  const listView = document.getElementById('account-list-view');
+  const detailView = document.getElementById('account-detail-view');
+  if (listView) listView.style.display = 'block';
+  if (detailView) detailView.style.display = 'none';
+
+  state.activeAccountDetail = null;
+
+  if (triggerHistoryBack && window.history.state && window.history.state.view === 'account-detail') {
+    window.history.back();
+    return;
+  }
+
+  // 계좌 목록 갱신 (정산/입출금 내역 반영)
+  loadAccounts(true);
+}
+
+// 브라우저 뒤로가기(popstate) 이벤트 핸들러
+window.addEventListener('popstate', (e) => {
+  const st = e.state;
+  if (st && st.view === 'account-detail' && st.accId) {
+    openAccountDetailModal(st.accId, false);
+  } else {
+    const detailView = document.getElementById('account-detail-view');
+    if (detailView && detailView.style.display !== 'none') {
+      closeAccountDetailView(false);
+    }
+  }
+});
 
 function switchDetailSubTab(subTabId) {
   state.activeDetailSubTab = subTabId;
   document.querySelectorAll('.detail-subtab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.subtab === subTabId);
+    if (b.dataset.subtab !== subTabId) b.blur();
   });
   document.querySelectorAll('.detail-subtab-pane').forEach(p => {
     p.classList.toggle('active', p.id === `subtab-${subTabId}`);
@@ -1383,8 +1469,14 @@ function switchSettingTab(tab) {
   const panelTg = document.getElementById('setting-panel-tg');
   const panelSync = document.getElementById('setting-panel-sync');
 
-  if (btnTg) btnTg.classList.toggle('active', tab === 'tg');
-  if (btnSync) btnSync.classList.toggle('active', tab === 'sync');
+  if (btnTg) {
+    btnTg.classList.toggle('active', tab === 'tg');
+    if (tab !== 'tg') btnTg.blur();
+  }
+  if (btnSync) {
+    btnSync.classList.toggle('active', tab === 'sync');
+    if (tab !== 'sync') btnSync.blur();
+  }
   if (panelTg) panelTg.style.display = tab === 'tg' ? 'block' : 'none';
   if (panelSync) panelSync.style.display = tab === 'sync' ? 'block' : 'none';
 }
