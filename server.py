@@ -273,18 +273,21 @@ async def list_accounts():
     for acc in raw_accounts:
         try:
             details = am.compute_account_details(acc)
-            summary = details.get("summary", {})
-            orders = details.get("orders", {})
-
-            # 기본 지표 정제
-            seed = float(acc.get("initial_seed", 0.0))
-            asset = float(summary.get("final_asset", seed))
-            cash = float(summary.get("final_cash", seed))
-            hold = int(summary.get("hold_shares", 0))
-            price = float(summary.get("latest_close", 0.0))
-            profit = float(summary.get("total_profit", asset - seed))
-            return_pct = float(summary.get("return_pct", ((asset / seed - 1.0) * 100) if seed > 0 else 0.0))
             
+            # compute_account_details 반환값에서 정밀 데이터 추출
+            seed = float(details.get("initial_seed") or acc.get("initial_seed", 0.0))
+            asset = float(details.get("current_asset") if details.get("current_asset") is not None else acc.get("total_asset", seed))
+            cash = float(details.get("current_cash") if details.get("current_cash") is not None else acc.get("current_cash", seed))
+            hold = int(details.get("current_hold") if details.get("current_hold") is not None else acc.get("current_holdings", 0))
+            price = float(details.get("current_price") if details.get("current_price") is not None else acc.get("current_price", 0.0))
+            profit = float(details.get("total_profit") if details.get("total_profit") is not None else (asset - seed))
+            return_pct = float(details.get("total_return_pct") if details.get("total_return_pct") is not None else (((asset / seed - 1.0) * 100) if seed > 0 else 0.0))
+            mode = str(details.get("mode") or "Normal")
+            pending_sell_count = int(details.get("pending_sell_count", 0))
+
+            buy_orders = details.get("buy_orders", [])
+            sell_orders = details.get("sell_orders", [])
+
             total_portfolio_asset += asset
             total_portfolio_cash += cash
             total_portfolio_seed += seed
@@ -295,8 +298,8 @@ async def list_accounts():
                 "ticker": acc["ticker"],
                 "strategy": acc["strategy"],
                 "start_date": acc.get("start_date", ""),
-                "current_date": acc.get("current_date", ""),
-                "operational_state": acc.get("operational_state", "WAITING_FOR_FILL"),
+                "current_date": details.get("current_date") or acc.get("current_date", ""),
+                "operational_state": details.get("operational_state") or acc.get("operational_state", "WAITING_FOR_FILL"),
                 "initial_seed": seed,
                 "reserve_ratio": float(acc.get("reserve_ratio", 0.05)),
                 "memo": acc.get("memo", ""),
@@ -306,10 +309,12 @@ async def list_accounts():
                 "current_price": round(price, 2),
                 "total_profit": round(profit, 2),
                 "return_pct": round(return_pct, 2),
-                "mode": summary.get("mode", "Normal"),
-                "pending_sell_count": int(summary.get("pending_sell_count", 0)),
+                "mode": mode,
+                "pending_sell_count": pending_sell_count,
                 "records_count": len(acc.get("trade_records", [])),
-                "has_orders": bool(orders.get("buy_orders") or orders.get("sell_orders")),
+                "has_orders": bool(buy_orders or sell_orders),
+                "buy_orders": buy_orders,
+                "sell_orders": sell_orders,
             })
         except Exception as e:
             print(f"계좌 [{acc.get('name')}] 계산 실패: {e}")
@@ -356,17 +361,24 @@ async def get_account_detail(acc_id: str):
         raise HTTPException(status_code=404, detail="Account not found")
 
     details = am.compute_account_details(target)
-    summary = details.get("summary", {})
-    orders = details.get("orders", {})
+    
+    buy_orders = details.get("buy_orders", [])
+    sell_orders = details.get("sell_orders", [])
     unsold_lots = details.get("unsold_lots", [])
+    netting_info = details.get("netting_info", {})
 
     trade_records = target.get("trade_records", [])
     adjustments = target.get("adjustments", [])
 
     return sanitize_for_json({
         "account": target,
-        "summary": summary,
-        "orders": orders,
+        "details": details,
+        "summary": details,
+        "orders": {
+            "buy_orders": buy_orders,
+            "sell_orders": sell_orders,
+            "netting_info": netting_info
+        },
         "unsold_lots": unsold_lots,
         "trade_records": trade_records[-100:] if len(trade_records) > 100 else trade_records,
         "adjustments": adjustments

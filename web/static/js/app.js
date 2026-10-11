@@ -274,28 +274,38 @@ async function renderDashboardOrders(accounts) {
 
       // 매도 주문행
       sellOrders.forEach(o => {
+        const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
+        const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
+        const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
+        const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || '목표가 도달 시 청산';
+        const typeStr = o['주문유형'] || 'LOC 매도';
         rowsHtml += `
           <tr>
             <td><strong>${acc.name}</strong> (${acc.ticker})</td>
-            <td><span class="tag-sell">LOC 매도</span></td>
-            <td>${fmt.usd(o.price)}</td>
-            <td>${fmt.num(o.shares)}주</td>
-            <td>${fmt.usd(o.amount || o.price * o.shares)}</td>
-            <td><span style="font-size:0.75rem;color:var(--text-muted);">${o.memo || '목표가 도달 시 청산'}</span></td>
+            <td><span class="tag-sell">${typeStr}</span></td>
+            <td>${fmt.usd(p)}</td>
+            <td>${fmt.num(q)}주</td>
+            <td>${fmt.usd(a)}</td>
+            <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
           </tr>
         `;
       });
 
       // 매수 주문행
       buyOrders.forEach(o => {
+        const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
+        const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
+        const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
+        const m = o.비고 || o.memo || o['체결조건'] || o['호가단계'] || '분할 LOC 매수';
+        const typeStr = o['주문유형'] || 'LOC 매수';
         rowsHtml += `
           <tr>
             <td><strong>${acc.name}</strong> (${acc.ticker})</td>
-            <td><span class="tag-buy">LOC 매수</span></td>
-            <td>${fmt.usd(o.price)}</td>
-            <td>${fmt.num(o.shares)}주</td>
-            <td>${fmt.usd(o.amount || o.price * o.shares)}</td>
-            <td><span style="font-size:0.75rem;color:var(--text-muted);">${o.memo || '분할 LOC 매수'}</span></td>
+            <td><span class="tag-buy">${typeStr}</span></td>
+            <td>${fmt.usd(p)}</td>
+            <td>${fmt.num(q)}주</td>
+            <td>${fmt.usd(a)}</td>
+            <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
           </tr>
         `;
       });
@@ -448,24 +458,36 @@ function renderDetailSubTabs(data) {
           </tr>
         </thead>
         <tbody>
-          ${sellList.map(o => `
+          ${sellList.map(o => {
+            const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
+            const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
+            const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
+            const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || '';
+            const typeStr = o['주문유형'] || 'LOC 매도';
+            return `
             <tr>
-              <td><span class="tag-sell">LOC 매도</span></td>
-              <td>${fmt.usd(o.price)}</td>
-              <td>${fmt.num(o.shares)}주</td>
-              <td>${fmt.usd(o.amount || o.price * o.shares)}</td>
-              <td><span style="font-size:0.75rem;color:var(--text-muted);">${o.memo || ''}</span></td>
+              <td><span class="tag-sell">${typeStr}</span></td>
+              <td>${fmt.usd(p)}</td>
+              <td>${fmt.num(q)}주</td>
+              <td>${fmt.usd(a)}</td>
+              <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
             </tr>
-          `).join('')}
-          ${buyList.map(o => `
+          `;}).join('')}
+          ${buyList.map(o => {
+            const p = o.price !== undefined ? o.price : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
+            const q = o.qty !== undefined ? o.qty : (o.shares !== undefined ? o.shares : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
+            const a = o.amount !== undefined ? o.amount : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
+            const m = o.비고 || o.memo || o['체결조건'] || o['호가단계'] || '';
+            const typeStr = o['주문유형'] || 'LOC 매수';
+            return `
             <tr>
-              <td><span class="tag-buy">LOC 매수</span></td>
-              <td>${fmt.usd(o.price)}</td>
-              <td>${fmt.num(o.shares)}주</td>
-              <td>${fmt.usd(o.amount || o.price * o.shares)}</td>
-              <td><span style="font-size:0.75rem;color:var(--text-muted);">${o.memo || ''}</span></td>
+              <td><span class="tag-buy">${typeStr}</span></td>
+              <td>${fmt.usd(p)}</td>
+              <td>${fmt.num(q)}주</td>
+              <td>${fmt.usd(a)}</td>
+              <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
             </tr>
-          `).join('')}
+          `;}).join('')}
         </tbody>
       </table>
     `;
