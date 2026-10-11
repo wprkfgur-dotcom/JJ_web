@@ -35,11 +35,28 @@ const fmt = {
 let appInitialized = false;
 let pollingInterval = null;
 
+// 공통 인증 헤더 Fetch 유틸리티
+function authFetch(url, options = {}) {
+  const opts = { ...options };
+  opts.headers = { ...(options.headers || {}) };
+  if (state.token) {
+    opts.headers['Authorization'] = `Bearer ${state.token}`;
+  }
+  return fetch(url, opts).then(async (res) => {
+    if (res.status === 401) {
+      console.warn('세션이 만료되었거나 인증되지 않았습니다.');
+      handleLogout();
+      throw new Error('로그인이 필요합니다.');
+    }
+    return res;
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   checkAuthAndInit();
 });
 
-function checkAuthAndInit() {
+async function checkAuthAndInit() {
   const savedUser = localStorage.getItem('jj_auth_user') || sessionStorage.getItem('jj_auth_user');
   const savedToken = localStorage.getItem('jj_auth_token') || sessionStorage.getItem('jj_auth_token');
 
@@ -47,16 +64,26 @@ function checkAuthAndInit() {
     try {
       state.user = JSON.parse(savedUser);
       state.token = savedToken;
-      showAppView();
-      initApp();
-      return;
+
+      // 서버에 세션 유효성 검증
+      const meRes = await fetch('/api/auth/me', {
+        headers: { 'Authorization': `Bearer ${savedToken}` }
+      });
+      const meData = await meRes.json();
+      if (meData.authenticated && meData.user) {
+        state.user = meData.user;
+        showAppView();
+        initApp();
+        return;
+      }
     } catch (e) {
-      console.warn('저장된 세션 파싱 오류:', e);
-      localStorage.removeItem('jj_auth_user');
-      localStorage.removeItem('jj_auth_token');
-      sessionStorage.removeItem('jj_auth_user');
-      sessionStorage.removeItem('jj_auth_token');
+      console.warn('세션 검증 실패:', e);
     }
+    // 유효하지 않은 세션 정리
+    localStorage.removeItem('jj_auth_user');
+    localStorage.removeItem('jj_auth_token');
+    sessionStorage.removeItem('jj_auth_user');
+    sessionStorage.removeItem('jj_auth_token');
   }
 
   showLoginView();
@@ -68,10 +95,35 @@ function showLoginView() {
   if (loginView) loginView.style.display = 'flex';
   if (appView) appView.style.display = 'none';
 
+  // 아이디/비밀번호 고정 없이 빈 값으로 초기화
   const unameInput = document.getElementById('login-username');
-  if (unameInput && !unameInput.value) unameInput.value = 'huxley';
+  if (unameInput) unameInput.value = '';
   const pwdInput = document.getElementById('login-password');
-  if (pwdInput && !pwdInput.value) pwdInput.value = 'lee0320';
+  if (pwdInput) pwdInput.value = '';
+
+  switchAuthMode('login');
+}
+
+function switchAuthMode(mode) {
+  const loginForm = document.getElementById('login-form');
+  const regForm = document.getElementById('register-form');
+  const btnLogin = document.getElementById('btn-show-login');
+  const btnReg = document.getElementById('btn-show-register');
+  const alertBox = document.getElementById('auth-alert-box');
+
+  if (alertBox) alertBox.style.display = 'none';
+
+  if (mode === 'login') {
+    if (loginForm) loginForm.style.display = 'block';
+    if (regForm) regForm.style.display = 'none';
+    if (btnLogin) btnLogin.classList.add('active');
+    if (btnReg) btnReg.classList.remove('active');
+  } else {
+    if (loginForm) loginForm.style.display = 'none';
+    if (regForm) regForm.style.display = 'block';
+    if (btnLogin) btnLogin.classList.remove('active');
+    if (btnReg) btnReg.classList.add('active');
+  }
 }
 
 function showAppView() {
@@ -83,10 +135,10 @@ function showAppView() {
   // 헤더 사용자 정보 갱신
   if (state.user) {
     const nameEl = document.getElementById('user-display-name');
-    if (nameEl) nameEl.textContent = state.user.name || state.user.username || 'huxley';
+    if (nameEl) nameEl.textContent = state.user.name || state.user.username;
     const linkedEl = document.getElementById('user-linked-badge');
     if (linkedEl) {
-      linkedEl.textContent = '연동: 연습용 (SOXL)';
+      linkedEl.textContent = `${state.user.username} 전용 계좌`;
     }
   }
 }
@@ -112,18 +164,24 @@ function initApp() {
   }, 15000);
 }
 
+// 1. 로그인 요청
 async function handleLoginSubmit(event) {
   if (event) event.preventDefault();
 
   const uname = document.getElementById('login-username').value.trim();
   const pwd = document.getElementById('login-password').value.trim();
   const remember = document.getElementById('login-remember').checked;
-  const errorBox = document.getElementById('login-error-msg');
+  const alertBox = document.getElementById('auth-alert-box');
   const btnText = document.getElementById('btn-login-text');
   const btnSpinner = document.getElementById('btn-login-spinner');
   const submitBtn = document.getElementById('btn-login-submit');
 
-  errorBox.style.display = 'none';
+  if (!uname || !pwd) {
+    showAuthAlert('아이디와 비밀번호를 모두 입력해주세요.', 'error');
+    return;
+  }
+
+  if (alertBox) alertBox.style.display = 'none';
   btnText.style.display = 'none';
   btnSpinner.style.display = 'inline';
   submitBtn.disabled = true;
@@ -153,10 +211,9 @@ async function handleLoginSubmit(event) {
 
     showAppView();
     initApp();
-    showToast(`환영합니다, ${data.user.name || uname}님! 내 계좌가 정상 연동되었습니다.`, 'success');
+    showToast(`환영합니다, ${data.user.name || uname}님! 나만의 투자 현황을 불러옵니다.`, 'success');
   } catch (err) {
-    errorBox.textContent = '⚠️ ' + err.message;
-    errorBox.style.display = 'flex';
+    showAuthAlert(err.message, 'error');
   } finally {
     btnText.style.display = 'inline';
     btnSpinner.style.display = 'none';
@@ -164,10 +221,66 @@ async function handleLoginSubmit(event) {
   }
 }
 
-function quickFillAndLogin() {
-  document.getElementById('login-username').value = 'huxley';
-  document.getElementById('login-password').value = 'lee0320';
-  handleLoginSubmit();
+// 2. 회원가입 요청
+async function handleRegisterSubmit(event) {
+  if (event) event.preventDefault();
+
+  const email = document.getElementById('reg-email').value.trim();
+  const uname = document.getElementById('reg-username').value.trim();
+  const pwd = document.getElementById('reg-password').value.trim();
+  const pwdConfirm = document.getElementById('reg-password-confirm').value.trim();
+  const btnText = document.getElementById('btn-reg-text');
+  const btnSpinner = document.getElementById('btn-reg-spinner');
+  const submitBtn = document.getElementById('btn-register-submit');
+
+  if (!email || !uname || !pwd) {
+    showAuthAlert('모든 필수 항목을 입력해주세요.', 'error');
+    return;
+  }
+
+  if (pwd !== pwdConfirm) {
+    showAuthAlert('비밀번호 확인이 일치하지 않습니다.', 'error');
+    return;
+  }
+
+  btnText.style.display = 'none';
+  btnSpinner.style.display = 'inline';
+  submitBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, username: uname, password: pwd })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.detail || '회원가입에 실패했습니다.');
+    }
+
+    state.user = data.user;
+    state.token = data.token;
+    localStorage.setItem('jj_auth_user', JSON.stringify(data.user));
+    localStorage.setItem('jj_auth_token', data.token);
+
+    showAppView();
+    initApp();
+    showToast(`회원가입 완료! 환영합니다, ${data.user.name || uname}님!`, 'success');
+  } catch (err) {
+    showAuthAlert(err.message, 'error');
+  } finally {
+    btnText.style.display = 'inline';
+    btnSpinner.style.display = 'none';
+    submitBtn.disabled = false;
+  }
+}
+
+function showAuthAlert(msg, type = 'error') {
+  const alertBox = document.getElementById('auth-alert-box');
+  if (!alertBox) return;
+  alertBox.textContent = (type === 'error' ? '⚠️ ' : '✅ ') + msg;
+  alertBox.style.display = 'flex';
 }
 
 function togglePasswordVisibility(inputId) {
@@ -178,7 +291,12 @@ function togglePasswordVisibility(inputId) {
 
 async function handleLogout() {
   try {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    if (state.token) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${state.token}` }
+      });
+    }
   } catch (e) {}
   localStorage.removeItem('jj_auth_user');
   localStorage.removeItem('jj_auth_token');
@@ -297,7 +415,7 @@ async function loadServerStatus() {
 // -------------------------------------------------------------------
 async function loadAccounts(isSilent = false) {
   try {
-    const res = await fetch('/api/accounts');
+    const res = await authFetch('/api/accounts');
     const data = await res.json();
     state.portfolio = data.portfolio;
     state.accounts = data.accounts;
@@ -306,6 +424,14 @@ async function loadAccounts(isSilent = false) {
     renderAccountsGrid(data.accounts);
     renderDashboardOrders(data.accounts);
     renderAllocationDonut(data.accounts);
+
+    // 헤더 사용자 계좌 상태 업데이트
+    if (state.user) {
+      const linkedEl = document.getElementById('user-linked-badge');
+      if (linkedEl) {
+        linkedEl.textContent = `${data.accounts.length}개 계좌 운용 중`;
+      }
+    }
   } catch (e) {
     if (!isSilent) showToast('계좌 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
   }
@@ -332,18 +458,21 @@ function renderAccountsGrid(accounts) {
   if (!container) return;
 
   if (!accounts || accounts.length === 0) {
+    const userName = state.user ? (state.user.name || state.user.username) : '';
     container.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; background: var(--bg-card); border-radius: var(--radius-md); border: 1px dashed var(--border-subtle);">
-        <p style="color: var(--text-secondary); margin-bottom: 1rem;">등록된 투자 계좌가 없습니다.</p>
-        <button class="btn btn-primary" onclick="openNewAccountModal()">+ 새 계좌 추가하기</button>
+      <div style="grid-column: 1 / -1; text-align: center; padding: 3.5rem 2rem; background: var(--bg-card); border-radius: var(--radius-md); border: 1px dashed var(--border-subtle);">
+        <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">💼</div>
+        <h3 style="color: var(--text-primary); margin-bottom: 0.5rem;">${userName ? userName + '님의 ' : ''}등록된 투자 계좌가 없습니다.</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.9rem;">종종이 3단계 LOC 또는 라오어 무한매수법 계좌를 개설하여 나만의 자동투자를 시작해보세요.</p>
+        <button class="btn btn-primary btn-lg" onclick="openNewAccountModal()">+ 첫 투자 계좌 개설하기</button>
       </div>
     `;
     return;
   }
 
   container.innerHTML = accounts.map(acc => {
-    const isOwner = acc.is_my_account || acc.owner === 'huxley';
-    const ownerBadge = isOwner ? '<span class="badge badge-owner">⭐ 내 연동계좌 (huxley)</span>' : '';
+    const isOwner = acc.is_my_account || (state.user && acc.owner === state.user.username);
+    const ownerBadge = isOwner ? `<span class="badge badge-owner">⭐ 내 계좌 (${state.user ? state.user.username : 'Owner'})</span>` : '';
     const modeClass = acc.mode === 'Safe' ? 'badge-mode-safe' : (acc.mode === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
     const stateClass = acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done';
     const stateText = acc.operational_state === 'WAITING_FOR_FILL' ? '장전 대기' : '정산 완료';
@@ -412,7 +541,7 @@ async function renderDashboardOrders(accounts) {
   let rowsHtml = '';
   for (const acc of accounts) {
     try {
-      const res = await fetch(`/api/accounts/${acc.id}`);
+      const res = await authFetch(`/api/accounts/${acc.id}`);
       const data = await res.json();
       const orders = data.orders || {};
       const buyOrders = orders.buy_orders || [];
@@ -539,7 +668,7 @@ function renderAllocationDonut(accounts) {
 // -------------------------------------------------------------------
 async function openAccountDetailModal(accId) {
   try {
-    const res = await fetch(`/api/accounts/${accId}`);
+    const res = await authFetch(`/api/accounts/${accId}`);
     const data = await res.json();
     state.activeAccountDetail = data;
 
@@ -758,7 +887,7 @@ function renderDetailSubTabs(data) {
 // -------------------------------------------------------------------
 async function advanceAccountDay(accId) {
   try {
-    const res = await fetch(`/api/accounts/${accId}/advance-day`, { method: 'POST' });
+    const res = await authFetch(`/api/accounts/${accId}/advance-day`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
       showToast('다음 거래일로 진행되었습니다.');
@@ -773,7 +902,7 @@ async function advanceAccountDay(accId) {
 async function undoLastTradeRecord(accId) {
   if (!confirm('마지막 날짜의 거래 기록을 삭제하고 이전 상태로 되돌리시겠습니까?')) return;
   try {
-    const res = await fetch(`/api/accounts/${accId}/undo`, { method: 'POST' });
+    const res = await authFetch(`/api/accounts/${accId}/undo`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
       showToast('마지막 기록이 정상 취소되었습니다.');
@@ -804,7 +933,7 @@ async function submitSettlement() {
   }
 
   try {
-    const res = await fetch(`/api/accounts/${accId}/close-settlement`, {
+    const res = await authFetch(`/api/accounts/${accId}/close-settlement`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -846,7 +975,7 @@ async function submitAdjustment() {
   }
 
   try {
-    const res = await fetch(`/api/accounts/${accId}/adjustment`, {
+    const res = await authFetch(`/api/accounts/${accId}/adjustment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type, amount, date: dateStr, reason })
@@ -883,7 +1012,7 @@ async function submitNewAccount() {
   }
 
   try {
-    const res = await fetch('/api/accounts', {
+    const res = await authFetch('/api/accounts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

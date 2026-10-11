@@ -52,6 +52,7 @@ if not ACCOUNTS_JSON.exists() and ACCOUNTS_EXAMPLE.exists():
 
 # 코어 모듈 임포트
 from core.account_manager import AccountManager
+from core.user_manager import UserManager
 from core.data import fetch_market_data, get_stock_price_for_date, get_exact_price_from_db
 from core.backtest_runner import run_strategies, build_chart_series
 from core.strategy_registry import ACCOUNT_STRATEGY_OPTIONS, DISPLAY_NAMES, JONGJONG, INFINITE, VR
@@ -91,6 +92,7 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 am = AccountManager(filepath=str(ACCOUNTS_JSON))
+um = UserManager()
 
 # -------------------------------------------------------------------
 # 자동매매 상태 관리 (향후 Oracle 서버 무중단 자동매매용)
@@ -208,9 +210,25 @@ class BacktestRequest(BaseModel):
     end_date: str = Field(default="2026-10-09")
     strategies: List[str] = Field(default=["종종이 기본전략", "무한매수법 v4.0", "SOXL 단순보유(B&H)"])
 
+class RegisterRequest(BaseModel):
+    email: str = Field(..., example="user@example.com")
+    username: str = Field(..., example="myid")
+    password: str = Field(..., example="mypassword")
+
 class LoginRequest(BaseModel):
-    username: str = Field(..., example="huxley")
-    password: str = Field(..., example="lee0320")
+    username: str = Field(..., example="myid")
+    password: str = Field(..., example="mypassword")
+
+
+def get_current_user(request: Request) -> Optional[dict]:
+    """요청 헤더(Bearer) 또는 쿼리 파라미터에서 세션 토큰을 검증하여 현재 회원 정보 반환"""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "").strip()
+    if not token:
+        token = request.query_params.get("token", "")
+    if not token:
+        return None
+    return um.get_user_by_token(token)
 
 
 # -------------------------------------------------------------------
@@ -227,54 +245,86 @@ async def serve_index():
 # -------------------------------------------------------------------
 # 사용자 인증 (Auth) API 라우트
 # -------------------------------------------------------------------
-@app.post("/api/auth/login")
-async def login(req: LoginRequest):
-    """사용자 로그인 처리 (계정: huxley / PW: lee0320) 및 전용 계좌 연동"""
-    username = req.username.strip()
-    password = req.password.strip()
-
-    if username.lower() == "huxley" and password == "lee0320":
-        token = "jj_token_huxley_auth_session_9941"
-        accounts = am.load_accounts()
-        linked = [a["id"] for a in accounts if a.get("owner") == "huxley" or a["id"] == "acc_20261001203651_7121"]
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    """신규 회원가입: 이메일, ID, PW만 입력받아 100,000회 PBKDF2 단방향 암호화 보관"""
+    try:
+        user = um.register_user(email=req.email, username=req.username, password=req.password)
+        token = um.create_session(user["username"])
         return {
             "success": True,
             "token": token,
             "user": {
-                "username": "huxley",
-                "name": "Huxley",
-                "role": "Master Trader",
-                "linked_accounts": linked,
-                "login_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
+                "username": user["username"],
+                "email": user["email"],
+                "name": user["name"],
+                "created_at": user["created_at"]
+            },
+            "message": f"환영합니다! {user['name']}님 회원가입이 완료되었습니다."
         }
-    raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[Register Error] {e}")
+        raise HTTPException(status_code=500, detail="회원가입 처리 중 오류가 발생했습니다.")
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    """사용자 로그인 처리 (단방향 해시 검증 및 세션 토큰 발급)"""
+    user = um.authenticate_user(req.username, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+
+    token = um.create_session(user["username"])
+    raw_accounts = am.load_accounts()
+    user_accounts = [
+        a["id"] for a in raw_accounts 
+        if a.get("owner", "huxley").lower() == user["username"].lower()
+    ]
+    return {
+        "success": True,
+        "token": token,
+        "user": {
+            "username": user["username"],
+            "email": user.get("email", ""),
+            "name": user["name"],
+            "linked_accounts": user_accounts,
+            "login_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+    }
 
 
 @app.get("/api/auth/me")
 async def check_current_user(request: Request):
-    """현재 로그인 세션 검증 및 연동 계좌 상태 확인"""
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header.replace("Bearer ", "").strip()
-    
-    if "huxley" in token or token == "jj_token_huxley_auth_session_9941":
-        accounts = am.load_accounts()
-        linked = [a["id"] for a in accounts if a.get("owner") == "huxley" or a["id"] == "acc_20261001203651_7121"]
-        return {
-            "authenticated": True,
-            "user": {
-                "username": "huxley",
-                "name": "Huxley",
-                "role": "Master Trader",
-                "linked_accounts": linked
-            }
+    """현재 로그인 세션 검증 및 사용자별 연동 계좌 상태 확인"""
+    user = get_current_user(request)
+    if not user:
+        return {"authenticated": False}
+
+    raw_accounts = am.load_accounts()
+    user_accounts = [
+        a["id"] for a in raw_accounts 
+        if a.get("owner", "huxley").lower() == user["username"].lower()
+    ]
+    return {
+        "authenticated": True,
+        "user": {
+            "username": user["username"],
+            "email": user.get("email", ""),
+            "name": user["name"],
+            "linked_accounts": user_accounts
         }
-    return {"authenticated": False}
+    }
 
 
 @app.post("/api/auth/logout")
-async def logout():
-    """로그아웃 처리"""
+async def logout(request: Request):
+    """로그아웃 처리 (세션 무효화)"""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.replace("Bearer ", "").strip()
+    if token:
+        um.delete_session(token)
     return {"success": True, "message": "성공적으로 로그아웃되었습니다."}
 
 
@@ -324,16 +374,24 @@ async def get_market_quote(ticker: str):
 
 
 @app.get("/api/accounts")
-async def list_accounts():
-    """등록된 계좌 목록 및 종합 포트폴리오 요약 반환"""
-    raw_accounts = am.load_accounts()
-    processed_list = []
+async def list_accounts(request: Request):
+    """현재 로그인한 회원의 계좌 목록 및 포트폴리오 요약 반환 (회원별 독립 격리)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
 
+    raw_accounts = am.load_accounts()
+    # 현재 로그인한 회원의 계좌만 추출
+    user_accounts = [
+        acc for acc in raw_accounts 
+        if acc.get("owner", "huxley").lower() == current_username
+    ]
+
+    processed_list = []
     total_portfolio_asset = 0.0
     total_portfolio_cash = 0.0
     total_portfolio_seed = 0.0
 
-    for acc in raw_accounts:
+    for acc in user_accounts:
         try:
             details = am.compute_account_details(acc)
             
@@ -357,8 +415,8 @@ async def list_accounts():
 
             processed_list.append({
                 "id": acc["id"],
-                "owner": acc.get("owner", "huxley"),
-                "is_my_account": (acc.get("owner", "huxley") == "huxley"),
+                "owner": acc.get("owner", current_username),
+                "is_my_account": True,
                 "name": acc["name"],
                 "ticker": acc["ticker"],
                 "strategy": acc["strategy"],
@@ -386,8 +444,8 @@ async def list_accounts():
             seed = float(acc.get("initial_seed", 0.0))
             processed_list.append({
                 "id": acc["id"],
-                "owner": acc.get("owner", "huxley"),
-                "is_my_account": (acc.get("owner", "huxley") == "huxley"),
+                "owner": acc.get("owner", current_username),
+                "is_my_account": True,
                 "name": acc["name"],
                 "ticker": acc["ticker"],
                 "strategy": acc["strategy"],
@@ -413,19 +471,26 @@ async def list_accounts():
             "total_seed": round(total_portfolio_seed, 2),
             "total_profit": round(total_portfolio_profit, 2),
             "return_pct": overall_return_pct,
-            "account_count": len(processed_list)
+            "account_count": len(processed_list),
+            "owner": current_username
         },
         "accounts": processed_list
     }
 
 
 @app.get("/api/accounts/{acc_id}")
-async def get_account_detail(acc_id: str):
-    """특정 계좌의 주문표, 미매도 슬롯, 매매일지, 입출금 상세 내역 반환"""
+async def get_account_detail(acc_id: str, request: Request):
+    """특정 계좌의 주문표, 미매도 슬롯, 매매일지, 입출금 상세 내역 반환 (회원별 격리)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
     accounts = am.load_accounts()
     target = next((a for a in accounts if a["id"] == acc_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="Account not found")
+
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌 정보만 열람할 수 있습니다.")
 
     details = am.compute_account_details(target)
     
@@ -456,8 +521,11 @@ async def get_account_detail(acc_id: str):
 
 
 @app.post("/api/accounts")
-async def create_account(req: CreateAccountRequest):
-    """신규 계좌 생성"""
+async def create_account(req: CreateAccountRequest, request: Request):
+    """신규 계좌 생성 (현재 로그인한 회원 소유로 등록)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
     new_acc = am.add_account(
         name=req.name,
         strategy=req.strategy,
@@ -465,14 +533,25 @@ async def create_account(req: CreateAccountRequest):
         start_date=req.start_date,
         initial_seed=req.initial_seed,
         memo=req.memo or "",
-        reserve_ratio=req.reserve_ratio
+        reserve_ratio=req.reserve_ratio,
+        owner=current_username
     )
     return {"success": True, "account": new_acc}
 
 
 @app.put("/api/accounts/{acc_id}")
-async def update_account(acc_id: str, req: UpdateAccountRequest):
-    """계좌 설정(명칭, 위기준비금 비율, 메모 등) 수정"""
+async def update_account(acc_id: str, req: UpdateAccountRequest, request: Request):
+    """계좌 설정(명칭, 위기준비금 비율, 메모 등) 수정 (소유자 검증)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
+    accounts = am.load_accounts()
+    target = next((a for a in accounts if a["id"] == acc_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌만 수정할 수 있습니다.")
+
     updated = am.update_account_settings(
         acc_id=acc_id,
         name=req.name,
@@ -486,8 +565,18 @@ async def update_account(acc_id: str, req: UpdateAccountRequest):
 
 
 @app.delete("/api/accounts/{acc_id}")
-async def delete_account(acc_id: str):
-    """계좌 삭제"""
+async def delete_account(acc_id: str, request: Request):
+    """계좌 삭제 (소유자 검증)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
+    accounts = am.load_accounts()
+    target = next((a for a in accounts if a["id"] == acc_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌만 삭제할 수 있습니다.")
+
     ok = am.delete_account(acc_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -495,8 +584,18 @@ async def delete_account(acc_id: str):
 
 
 @app.post("/api/accounts/{acc_id}/advance-day")
-async def advance_account_day(acc_id: str):
-    """계좌 운용 날짜를 다음 미국 개장일로 진행 (장전 주문대기 모드로 전환)"""
+async def advance_account_day(acc_id: str, request: Request):
+    """계좌 운용 날짜를 다음 미국 개장일로 진행 (소유자 검증)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
+    accounts = am.load_accounts()
+    target = next((a for a in accounts if a["id"] == acc_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌만 운용할 수 있습니다.")
+
     res = am.advance_next_day(acc_id)
     if not res:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -504,8 +603,18 @@ async def advance_account_day(acc_id: str):
 
 
 @app.post("/api/accounts/{acc_id}/close-settlement")
-async def record_close_settlement(acc_id: str, req: SettlementRequest):
-    """미국 장마감 후 당일 종가 및 체결 수량 입력 정산"""
+async def record_close_settlement(acc_id: str, req: SettlementRequest, request: Request):
+    """미국 장마감 후 당일 종가 및 체결 수량 입력 정산 (소유자 검증)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
+    accounts = am.load_accounts()
+    target = next((a for a in accounts if a["id"] == acc_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌만 정산할 수 있습니다.")
+
     res = am.record_daily_close(
         acc_id=acc_id,
         close_price=req.close_price,
@@ -522,8 +631,18 @@ async def record_close_settlement(acc_id: str, req: SettlementRequest):
 
 
 @app.post("/api/accounts/{acc_id}/adjustment")
-async def add_account_adjustment(acc_id: str, req: AdjustmentRequest):
-    """계좌 입금(DEPOSIT) 또는 출금(WITHDRAW, 세금 등) 기록"""
+async def add_account_adjustment(acc_id: str, req: AdjustmentRequest, request: Request):
+    """계좌 입금 또는 출금 기록 (소유자 검증)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
+    accounts = am.load_accounts()
+    target = next((a for a in accounts if a["id"] == acc_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌만 입출금 기록이 가능합니다.")
+
     ok = am.add_adjustment(
         acc_id=acc_id,
         adj_type=req.type,
@@ -537,8 +656,18 @@ async def add_account_adjustment(acc_id: str, req: AdjustmentRequest):
 
 
 @app.post("/api/accounts/{acc_id}/undo")
-async def undo_last_trade(acc_id: str):
-    """마지막 거래일 기록 취소 (Undo)"""
+async def undo_last_trade(acc_id: str, request: Request):
+    """마지막 거래일 기록 취소 (소유자 검증)"""
+    user = get_current_user(request)
+    current_username = user["username"].lower() if user else "huxley"
+
+    accounts = am.load_accounts()
+    target = next((a for a in accounts if a["id"] == acc_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if target.get("owner", "huxley").lower() != current_username:
+        raise HTTPException(status_code=403, detail="본인의 계좌만 취소(Undo)할 수 있습니다.")
+
     ok = am.delete_last_trade_record(acc_id)
     if not ok:
         raise HTTPException(status_code=400, detail="Cannot undo last record")

@@ -76,7 +76,7 @@ class AccountManager:
 
     def add_account(self, name: str, strategy: str, ticker: str, start_date: str, initial_seed: float, memo: str = "",
                     trade_records: list = None, adjustments: list = None, current_date: str = None, operational_state: str = None,
-                    reserve_ratio: float = 0.05) -> dict:
+                    reserve_ratio: float = 0.05, owner: str = "huxley") -> dict:
         accounts = self.load_accounts()
         acc_id = f"acc_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:4]}"
         
@@ -91,6 +91,7 @@ class AccountManager:
 
         new_acc = {
             'id': acc_id,
+            'owner': (owner or 'huxley').strip().lower(),
             'name': name.strip(),
             'strategy': strategy.strip(),
             'ticker': ticker.strip().upper(),

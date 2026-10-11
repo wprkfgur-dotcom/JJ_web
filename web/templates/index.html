@@ -30,25 +30,28 @@
       <div class="login-header">
         <div class="login-brand-icon">⚡</div>
         <h2>JJ INVEST PRO</h2>
-        <p class="login-subtitle">종종이 3단계 LOC & 무한매수 자동 운용 시스템</p>
+        <p class="login-subtitle">종종이 3단계 LOC & 무한매수 운용 시스템</p>
       </div>
 
-      <div class="login-info-banner">
-        <span style="font-size:1.1rem;">🔐</span>
-        <div>
-          <strong style="color:#93c5fd;">오라클 웹 서버 보안 세션 로그인</strong>
-          <p>등록된 사용자 계정(huxley)으로 로그인 시 연동 계좌를 자동으로 불러옵니다.</p>
-        </div>
+      <!-- Login / Register Tab Switcher -->
+      <div class="auth-toggle-tabs">
+        <button type="button" class="auth-toggle-btn active" id="btn-show-login" onclick="switchAuthMode('login')">
+          🔑 로그인
+        </button>
+        <button type="button" class="auth-toggle-btn" id="btn-show-register" onclick="switchAuthMode('register')">
+          ✨ 회원가입
+        </button>
       </div>
 
+      <div id="auth-alert-box" class="login-error-box" style="display:none;"></div>
+
+      <!-- 1. LOGIN FORM -->
       <form id="login-form" onsubmit="handleLoginSubmit(event)">
-        <div id="login-error-msg" class="login-error-box" style="display:none;"></div>
-
         <div class="form-group" style="margin-bottom: 1.15rem;">
           <label for="login-username">사용자 아이디 (User ID)</label>
           <div class="input-with-icon">
             <span class="input-icon">👤</span>
-            <input type="text" id="login-username" class="form-input" placeholder="아이디 입력 (huxley)" autocomplete="username" required value="huxley">
+            <input type="text" id="login-username" class="form-input" placeholder="아이디를 입력하세요" autocomplete="username" required>
           </div>
         </div>
 
@@ -56,7 +59,7 @@
           <label for="login-password">비밀번호 (Password)</label>
           <div class="input-with-icon">
             <span class="input-icon">🔑</span>
-            <input type="password" id="login-password" class="form-input" placeholder="비밀번호 입력 (lee0320)" autocomplete="current-password" required value="lee0320">
+            <input type="password" id="login-password" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="current-password" required>
             <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility('login-password')" title="비밀번호 표시/숨김">👁️</button>
           </div>
         </div>
@@ -66,27 +69,66 @@
             <input type="checkbox" id="login-remember" checked>
             <span style="color: var(--text-secondary);">로그인 유지 (자동 로그인)</span>
           </label>
-          <span style="color: var(--accent-cyan); font-size: 0.75rem;">연동 계정: huxley</span>
         </div>
 
-        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block btn-lg" style="margin-bottom: 0.75rem;">
-          <span id="btn-login-text">🚀 로그인 및 내 계좌 연동</span>
+        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block btn-lg" style="margin-bottom: 1rem;">
+          <span id="btn-login-text">🚀 로그인 및 내 자산 조회</span>
           <span id="btn-login-spinner" style="display:none;">⏳ 접속 중...</span>
         </button>
 
-        <div class="login-divider">
-          <span>또는</span>
+        <div style="text-align:center;font-size:0.8rem;color:var(--text-secondary);">
+          아직 회원이 아니신가요? <a href="#" onclick="switchAuthMode('register'); return false;" style="color:var(--accent-cyan);font-weight:600;text-decoration:none;">회원가입하기</a>
         </div>
-
-        <button type="button" class="btn btn-secondary btn-block" onclick="quickFillAndLogin()" style="font-size:0.85rem;">
-          ⚡ Huxley 계정으로 1초 빠른 로그인
-        </button>
       </form>
 
-      <div class="login-footer">
-        <span>🔒 256-bit 보안 세션</span>
-        <span>•</span>
-        <span>오라클 클라우드 우분투 실시간 운용</span>
+      <!-- 2. REGISTER FORM -->
+      <form id="register-form" onsubmit="handleRegisterSubmit(event)" style="display:none;">
+        <div class="form-group" style="margin-bottom: 1.1rem;">
+          <label for="reg-email">이메일 주소 (Email) *</label>
+          <div class="input-with-icon">
+            <span class="input-icon">📧</span>
+            <input type="email" id="reg-email" class="form-input" placeholder="이메일 입력 (예: user@example.com)" required>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.1rem;">
+          <label for="reg-username">사용자 아이디 (User ID) *</label>
+          <div class="input-with-icon">
+            <span class="input-icon">👤</span>
+            <input type="text" id="reg-username" class="form-input" placeholder="영문/숫자 3~20자" autocomplete="username" required>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.1rem;">
+          <label for="reg-password">비밀번호 (Password) *</label>
+          <div class="input-with-icon">
+            <span class="input-icon">🔑</span>
+            <input type="password" id="reg-password" class="form-input" placeholder="4자 이상 입력" autocomplete="new-password" required>
+            <button type="button" class="btn-toggle-pw" onclick="togglePasswordVisibility('reg-password')" title="비밀번호 표시/숨김">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1.35rem;">
+          <label for="reg-password-confirm">비밀번호 확인 *</label>
+          <div class="input-with-icon">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="reg-password-confirm" class="form-input" placeholder="비밀번호 다시 입력" autocomplete="new-password" required>
+          </div>
+        </div>
+
+        <button type="submit" id="btn-register-submit" class="btn btn-primary btn-block btn-lg" style="margin-bottom: 1rem;">
+          <span id="btn-reg-text">✨ 무료 회원가입 완료</span>
+          <span id="btn-reg-spinner" style="display:none;">⏳ 계정 생성 중...</span>
+        </button>
+
+        <div style="text-align:center;font-size:0.8rem;color:var(--text-secondary);">
+          이미 계정이 있으신가요? <a href="#" onclick="switchAuthMode('login'); return false;" style="color:var(--accent-cyan);font-weight:600;text-decoration:none;">로그인하기</a>
+        </div>
+      </form>
+
+      <div class="login-footer" style="margin-top: 1.5rem; line-height: 1.4; flex-direction: column; gap: 0.25rem;">
+        <div>🔒 <strong>PBKDF2 100,000회 단방향 암호화 보관</strong></div>
+        <div style="color: var(--text-muted); font-size: 0.7rem;">관리자/개발자도 비밀번호를 조회할 수 없으며, 회원별 투자 데이터는 철저히 분리 보관됩니다.</div>
       </div>
     </div>
   </div>

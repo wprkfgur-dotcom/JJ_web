@@ -37,8 +37,10 @@ env*/
 data/market_data.db
 app_code/data/market_data.db
 
-# Live Account Data (보안 및 덮어쓰기 방지: accounts.example.json은 보존)
+# Live Account & User Data
 # accounts.json
+app_code/data/sessions.json
+app_code/data/users.json
 
 # Operating System & IDE
 .DS_Store
