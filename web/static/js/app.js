@@ -1586,6 +1586,82 @@ async function sendTelegramTest() {
   }
 }
 
+async function sendSyncTest() {
+  const url = document.getElementById('sync-gas-url').value.trim();
+  const testBtn = document.getElementById('btn-sync-test');
+
+  if (!url || !url.startsWith('http')) {
+    showToast('유효한 Google Apps Script Web App URL을 먼저 입력해주세요.', 'error');
+    document.getElementById('sync-gas-url').focus();
+    return;
+  }
+
+  const origText = testBtn ? testBtn.innerHTML : '';
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.innerHTML = '<span>⏳</span> 구글 드라이브 연결 확인 중...';
+  }
+
+  try {
+    const res = await fetch('/api/sync/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, enabled: true })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || '구글 드라이브(GAS) 연동 성공! ☁️', 'success');
+      const statusText = document.getElementById('sync-modal-status-text');
+      if (statusText) {
+        statusText.textContent = '연동 성공 (Connected)';
+        statusText.style.color = 'var(--profit-green)';
+      }
+      const timeEl = document.getElementById('sync-modal-last-time');
+      if (timeEl) timeEl.textContent = new Date().toLocaleString();
+      const msgEl = document.getElementById('sync-modal-last-msg');
+      if (msgEl) msgEl.textContent = 'Ping 테스트 성공';
+    } else {
+      showToast(`연동 테스트 실패: ${data.message}`, 'error');
+    }
+  } catch (e) {
+    showToast(`연동 테스트 오류: ${e.message}`, 'error');
+  } finally {
+    if (testBtn) {
+      testBtn.disabled = false;
+      testBtn.innerHTML = origText;
+    }
+  }
+}
+
+function copyGasCode() {
+  const codeEl = document.getElementById('gas-code-sample');
+  if (!codeEl) return;
+  const text = codeEl.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('액션스크립트(GAS) 샘플 코드가 클립보드에 복사되었습니다! 📋', 'success');
+    }).catch(() => {
+      fallbackCopyText(text);
+    });
+  } else {
+    fallbackCopyText(text);
+  }
+}
+
+function fallbackCopyText(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    showToast('액션스크립트(GAS) 샘플 코드가 클립보드에 복사되었습니다! 📋', 'success');
+  } catch (err) {
+    showToast('클립보드 복사 실패', 'error');
+  }
+  document.body.removeChild(textarea);
+}
+
 async function saveActiveSettings() {
   if (currentSettingTab === 'tg') {
     // 텔레그램 설정 저장

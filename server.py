@@ -880,6 +880,16 @@ async def sync_push_to_drive():
     return {"success": ok, "message": msg}
 
 
+@app.post("/api/sync/test")
+async def sync_test_connection(payload: SyncConfigRequest):
+    """구글 앱스 스크립트 연결 Ping 테스트"""
+    url = payload.url.strip()
+    if not url:
+        return {"success": False, "message": "Google Apps Script Web App URL을 입력해주세요."}
+    ok, msg = test_connection(url)
+    return {"success": ok, "message": msg}
+
+
 @app.post("/api/sync/config")
 async def update_sync_config(req: SyncConfigRequest):
     """구글 Apps Script Web App URL 및 활성화 여부 설정"""
