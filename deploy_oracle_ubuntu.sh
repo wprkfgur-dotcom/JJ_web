@@ -12,8 +12,9 @@ echo "============================================================"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
-# 1. 필수 시스템 패키지 설치
-echo "📦 [1/5] 우분투 시스템 패키지 업데이트 및 파이썬 환경 설치..."
+# 1. 필수 시스템 패키지 설치 및 타임존 설정 (한국 표준시 KST)
+echo "📦 [1/5] 우분투 타임존(Asia/Seoul) 설정 및 시스템 패키지 설치..."
+sudo timedatectl set-timezone Asia/Seoul || true
 sudo apt-get update -y
 sudo apt-get install -y python3 python3-venv python3-pip curl iptables-persistent
 
