@@ -1,0 +1,624 @@
+/* =====================================================================
+   JJ Invest - Mobile Dedicated Web App Design System
+   Mobile-First, Touch-Optimized, Fintech Dark Theme
+   ===================================================================== */
+
+:root {
+  --m-bg-main: #0a0e17;
+  --m-bg-surface: #111827;
+  --m-bg-card: rgba(19, 27, 46, 0.95);
+  --m-bg-glass: rgba(15, 23, 42, 0.88);
+  --m-border-subtle: #1e293b;
+  --m-border-accent: #2e3d5b;
+  
+  --m-text-primary: #f8fafc;
+  --m-text-secondary: #94a3b8;
+  --m-text-muted: #64748b;
+  
+  --m-accent-cyan: #06b6d4;
+  --m-accent-blue: #3b82f6;
+  --m-accent-indigo: #6366f1;
+  --m-profit-green: #10b981;
+  --m-loss-red: #ef4444;
+  --m-warning-gold: #f59e0b;
+  
+  --m-radius-sm: 8px;
+  --m-radius-md: 12px;
+  --m-radius-lg: 16px;
+  --m-radius-xl: 22px;
+  
+  --m-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --m-safe-top: env(safe-area-inset-top, 0px);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Inter", Roboto, sans-serif;
+  background-color: var(--m-bg-main);
+  background-image: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.12) 0%, transparent 60%);
+  background-attachment: fixed;
+  color: var(--m-text-primary);
+  line-height: 1.45;
+  font-size: 14px;
+  min-height: 100vh;
+  padding-bottom: calc(75px + var(--m-safe-bottom));
+  padding-top: var(--m-safe-top);
+  overflow-x: hidden;
+}
+
+/* =====================================================================
+   Top Mobile App Header
+   ===================================================================== */
+.m-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--m-bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--m-border-subtle);
+  padding: 0.65rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.m-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: var(--m-text-primary);
+}
+
+.m-brand-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+.m-brand-title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #ffffff, #93c5fd);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.m-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.m-icon-btn {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid var(--m-border-subtle);
+  color: var(--m-text-primary);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.m-icon-btn:active {
+  transform: scale(0.92);
+  background: rgba(59, 130, 246, 0.2);
+}
+
+/* =====================================================================
+   Bottom Navigation Bar
+   ===================================================================== */
+.m-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: rgba(11, 15, 25, 0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-top: 1px solid var(--m-border-subtle);
+  display: flex;
+  justify-content: space-around;
+  padding: 0.4rem 0 calc(0.4rem + var(--m-safe-bottom));
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+}
+
+.m-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--m-text-muted);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-decoration: none;
+}
+
+.m-nav-item .m-nav-icon {
+  font-size: 1.25rem;
+  margin-bottom: 2px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.m-nav-item.active {
+  color: var(--m-accent-cyan);
+}
+
+.m-nav-item.active .m-nav-icon {
+  transform: scale(1.15) translateY(-2px);
+}
+
+/* =====================================================================
+   Page Container & Views
+   ===================================================================== */
+.m-container {
+  padding: 0.9rem 1rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.m-view-section {
+  display: none;
+  animation: mFadeIn 0.25s ease-out;
+}
+
+.m-view-section.active {
+  display: block;
+}
+
+@keyframes mFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =====================================================================
+   Cards & Summaries
+   ===================================================================== */
+.m-card {
+  background: var(--m-bg-card);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-md);
+  padding: 1rem;
+  margin-bottom: 0.9rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+
+.m-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.m-card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--m-text-primary);
+}
+
+.m-portfolio-hero {
+  background: linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--m-radius-lg);
+  padding: 1.2rem 1.1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px rgba(59, 130, 246, 0.15);
+}
+
+.m-hero-label {
+  font-size: 0.775rem;
+  color: var(--m-text-secondary);
+  font-weight: 500;
+}
+
+.m-hero-amount {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0.2rem 0;
+  color: #ffffff;
+}
+
+.m-hero-profit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.m-grid-2x2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.9rem;
+}
+
+.m-sub-stat {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  padding: 0.65rem 0.75rem;
+}
+
+.m-sub-stat-label {
+  font-size: 0.725rem;
+  color: var(--m-text-muted);
+}
+
+.m-sub-stat-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 0.15rem;
+  color: var(--m-text-primary);
+}
+
+/* =====================================================================
+   Account Cards & Badges
+   ===================================================================== */
+.m-account-item {
+  background: var(--m-bg-card);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-md);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.m-account-item:active {
+  transform: scale(0.985);
+  border-color: var(--m-accent-blue);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.m-acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+
+.m-acc-name-group {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.m-ticker-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  color: #fff;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.m-acc-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--m-text-primary);
+}
+
+.m-strat-tag {
+  font-size: 0.7rem;
+  color: var(--m-accent-cyan);
+  background: rgba(6, 182, 212, 0.12);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.m-acc-metrics {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 0.6rem;
+  margin-top: 0.4rem;
+}
+
+.m-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+}
+.m-badge-profit { background: rgba(16, 185, 129, 0.15); color: var(--m-profit-green); }
+.m-badge-loss { background: rgba(239, 68, 68, 0.15); color: var(--m-loss-red); }
+.m-badge-neutral { background: rgba(148, 163, 184, 0.15); color: var(--m-text-secondary); }
+
+/* =====================================================================
+   Account Detail View
+   ===================================================================== */
+.m-subnav-tabs {
+  display: flex;
+  overflow-x: auto;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+  margin-bottom: 0.85rem;
+  scrollbar-width: none;
+}
+.m-subnav-tabs::-webkit-scrollbar { display: none; }
+
+.m-subtab-btn {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--m-border-subtle);
+  color: var(--m-text-secondary);
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--m-radius-sm);
+  font-size: 0.775rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.m-subtab-btn.active {
+  background: var(--m-accent-blue);
+  color: #fff;
+  border-color: var(--m-accent-blue);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+/* Mobile Order Cards */
+.m-order-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  padding: 0.75rem;
+  margin-bottom: 0.6rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.m-order-card.buy {
+  border-left: 3px solid var(--m-accent-blue);
+}
+.m-order-card.sell {
+  border-left: 3px solid var(--m-loss-red);
+}
+
+.m-order-type {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--m-text-primary);
+}
+
+.m-order-detail {
+  font-size: 0.75rem;
+  color: var(--m-text-secondary);
+  margin-top: 0.15rem;
+}
+
+.m-order-price {
+  text-align: right;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+/* =====================================================================
+   Buttons & Inputs
+   ===================================================================== */
+.m-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-radius: var(--m-radius-md);
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.m-btn:active {
+  transform: scale(0.98);
+}
+
+.m-btn-primary {
+  background: linear-gradient(135deg, #2563eb, #0284c7);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.m-btn-success {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+}
+
+.m-btn-secondary {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid var(--m-border-subtle);
+  color: var(--m-text-primary);
+}
+
+.m-btn-sm {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.775rem;
+  border-radius: var(--m-radius-sm);
+  width: auto;
+}
+
+.m-form-group {
+  margin-bottom: 0.85rem;
+}
+
+.m-form-label {
+  display: block;
+  font-size: 0.775rem;
+  font-weight: 600;
+  color: var(--m-text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.m-form-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--m-border-subtle);
+  border-radius: var(--m-radius-sm);
+  padding: 0.65rem 0.85rem;
+  color: var(--m-text-primary);
+  font-size: 0.9rem;
+  outline: none;
+}
+.m-form-input:focus {
+  border-color: var(--m-accent-blue);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* =====================================================================
+   Chips Row
+   ===================================================================== */
+.m-chips-row {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  scrollbar-width: none;
+}
+.m-chips-row::-webkit-scrollbar { display: none; }
+
+.m-chip {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid var(--m-border-subtle);
+  color: var(--m-text-secondary);
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.775rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.m-chip.active {
+  background: var(--m-accent-blue);
+  color: #fff;
+  border-color: var(--m-accent-blue);
+}
+
+/* =====================================================================
+   Mobile Modal & Bottom Sheet
+   ===================================================================== */
+.m-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.m-modal-overlay.active {
+  display: flex;
+}
+
+.m-bottom-sheet {
+  background: #111827;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  border: 1px solid var(--m-border-subtle);
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 1.25rem 1rem calc(1.5rem + var(--m-safe-bottom));
+  animation: sheetSlideUp 0.25s ease-out;
+}
+
+@keyframes sheetSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.m-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  border-bottom: 1px solid var(--m-border-subtle);
+  padding-bottom: 0.75rem;
+}
+
+.m-sheet-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.m-sheet-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--m-text-muted);
+  cursor: pointer;
+}
+
+/* Toast */
+.m-toast {
+  position: fixed;
+  bottom: calc(85px + var(--m-safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid var(--m-border-accent);
+  color: #fff;
+  padding: 0.6rem 1.2rem;
+  border-radius: 24px;
+  font-size: 0.825rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  z-index: 3000;
+  display: none;
+  white-space: nowrap;
+}
+
+/* Switch View Pill */
+.m-switch-view-bar {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--m-border-subtle);
+}
+.m-switch-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--m-text-secondary);
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid var(--m-border-subtle);
+  padding: 0.45rem 1rem;
+  border-radius: 20px;
+  text-decoration: none;
+}

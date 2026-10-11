@@ -248,15 +248,64 @@ def get_current_user(request: Request) -> Optional[dict]:
     return um.get_user_by_token(token)
 
 
+def is_mobile_user_agent(user_agent: str) -> bool:
+    """스마트폰/모바일 디바이스 User-Agent 판별"""
+    ua = (user_agent or "").lower()
+    mobile_keywords = [
+        "mobile", "android", "iphone", "ipod", "blackberry",
+        "windows phone", "opera mini", "iemobile", "webos"
+    ]
+    return any(k in ua for k in mobile_keywords)
+
+
 # -------------------------------------------------------------------
-# HTML 메인 페이지 라우트
+# HTML 메인 페이지 라우트 (PC 및 모바일 자동 라우팅)
 # -------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-async def serve_index():
+async def serve_index(request: Request):
+    """
+    메인 페이지 제공:
+    - 쿼리 파라미터(?view=mobile 또는 ?view=pc) 또는 쿠키로 명시적 모드 지정 가능
+    - 모바일 스마트폰 접속 시 자동으로 최적화된 모바일 전용 버전(mobile.html) 제공
+    - 데스크톱 PC 접속 시 풀스크린 데스크톱 버전(index.html) 제공
+    """
+    view_override = request.query_params.get("view") or request.cookies.get("view_mode")
+    ua = request.headers.get("user-agent", "")
+    
+    is_mobile = False
+    if view_override == "mobile":
+        is_mobile = True
+    elif view_override == "pc":
+        is_mobile = False
+    else:
+        is_mobile = is_mobile_user_agent(ua)
+
+    if is_mobile:
+        mobile_file = BASE_DIR / "web" / "templates" / "mobile.html"
+        if mobile_file.exists():
+            resp = FileResponse(mobile_file)
+            if request.query_params.get("view"):
+                resp.set_cookie("view_mode", request.query_params.get("view"), max_age=60*60*24*30)
+            return resp
+
     index_file = BASE_DIR / "web" / "templates" / "index.html"
     if not index_file.exists():
         raise HTTPException(status_code=404, detail="Frontend index.html not found")
-    return FileResponse(index_file)
+    resp = FileResponse(index_file)
+    if request.query_params.get("view"):
+        resp.set_cookie("view_mode", request.query_params.get("view"), max_age=60*60*24*30)
+    return resp
+
+
+@app.get("/m", response_class=HTMLResponse)
+async def serve_mobile_direct(request: Request):
+    """모바일 버전 직접 접속 라우트 (/m)"""
+    mobile_file = BASE_DIR / "web" / "templates" / "mobile.html"
+    if not mobile_file.exists():
+        raise HTTPException(status_code=404, detail="Mobile template not found")
+    resp = FileResponse(mobile_file)
+    resp.set_cookie("view_mode", "mobile", max_age=60*60*24*30)
+    return resp
 
 
 # -------------------------------------------------------------------

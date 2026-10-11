@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>JJ INVEST 모바일 ⚡ 종종이 & 웅덩이 투자 운용</title>
+  <meta name="theme-color" content="#0a0e17">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <!-- Favicon & App Icon -->
+  <link rel="icon" type="image/png" href="/static/images/app_icon.png">
+  <link rel="apple-touch-icon" href="/static/images/app_icon.png">
+  
+  <!-- Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Mobile Stylesheet -->
+  <link rel="stylesheet" href="/static/css/mobile.css">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- =============================================================== -->
+  <!-- 0. LOGIN VIEW                                                   -->
+  <!-- =============================================================== -->
+  <div id="m-login-view" class="m-container" style="display:none;padding-top:2.5rem;">
+    <div style="text-align:center;margin-bottom:1.75rem;">
+      <img src="/static/images/app_icon.png" alt="JJ INVEST" style="width:64px;height:64px;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+      <h2 style="font-size:1.4rem;font-weight:800;margin-top:0.75rem;background:linear-gradient(90deg,#fff,#93c5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+        JJ INVEST PRO
+      </h2>
+      <p style="font-size:0.8rem;color:var(--m-text-secondary);margin-top:0.25rem;">
+        종종이 3단계 LOC & 웅덩이 매매 운용 시스템
+      </p>
+    </div>
+
+    <div class="m-card">
+      <form onsubmit="handleMobileLogin(event)">
+        <div class="m-form-group">
+          <label class="m-form-label" for="m-login-user">사용자 아이디 (User ID)</label>
+          <input type="text" id="m-login-user" class="m-form-input" placeholder="아이디 입력" autocomplete="username" required>
+        </div>
+        <div class="m-form-group" style="margin-bottom:1.25rem;">
+          <label class="m-form-label" for="m-login-pass">비밀번호 (Password)</label>
+          <input type="password" id="m-login-pass" class="m-form-input" placeholder="비밀번호 입력" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="m-btn m-btn-primary" style="font-size:1rem;padding:0.85rem;">
+          🔑 로그인
+        </button>
+      </form>
+    </div>
+
+    <div class="m-switch-view-bar">
+      <a href="/?view=pc" class="m-switch-view-btn">💻 PC 데스크톱 버전으로 보기</a>
+    </div>
+  </div>
+
+  <!-- =============================================================== -->
+  <!-- MAIN APP VIEW                                                   -->
+  <!-- =============================================================== -->
+  <div id="m-app-view" style="display:none;">
+    
+    <!-- Top Mobile Header -->
+    <header class="m-header">
+      <a href="#" class="m-brand" onclick="mSwitchTab('dashboard'); return false;">
+        <img src="/static/images/app_icon.png" alt="JJ" class="m-brand-img">
+        <span class="m-brand-title">JJ INVEST</span>
+      </a>
+      <div class="m-header-actions">
+        <span id="m-header-user-name" style="font-size:0.8rem;color:var(--m-text-secondary);font-weight:600;"></span>
+        <button type="button" class="m-icon-btn" onclick="mSyncGoogleDrive()" title="구글 드라이브 동기화">☁️</button>
+        <button type="button" class="m-icon-btn" onclick="mLogout()" title="로그아웃">🚪</button>
+      </div>
+    </header>
+
+    <!-- =============================================================== -->
+    <!-- TAB 1: 대시보드 (Dashboard)                                      -->
+    <!-- =============================================================== -->
+    <section class="m-container m-view-section active" id="m-section-dashboard">
+      <!-- Portfolio Hero -->
+      <div class="m-portfolio-hero">
+        <div class="m-hero-label">내 포트폴리오 총 평가 자산</div>
+        <div class="m-hero-amount" id="m-hero-asset">$0.00</div>
+        <div class="m-hero-profit" id="m-hero-profit">
+          <span>▲ $0.00 (+0.00%)</span>
+        </div>
+        
+        <div class="m-grid-2x2">
+          <div class="m-sub-stat">
+            <div class="m-sub-stat-label">보유 현금</div>
+            <div class="m-sub-stat-val" id="m-sub-cash">$0.00</div>
+          </div>
+          <div class="m-sub-stat">
+            <div class="m-sub-stat-label">투자 원금(시드)</div>
+            <div class="m-sub-stat-val" id="m-sub-seed">$0.00</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+        <button class="m-btn m-btn-primary" style="flex:1;font-size:0.8rem;padding:0.65rem;" onclick="mSwitchTab('accounts')">
+          💼 계좌 현황 보기
+        </button>
+        <button class="m-btn m-btn-secondary" style="flex:1;font-size:0.8rem;padding:0.65rem;" onclick="mSwitchTab('backtest')">
+          ⚡ 백테스트 시뮬레이터
+        </button>
+      </div>
+
+      <!-- 내 계좌 빠른 리스트 -->
+      <div class="m-card-header" style="margin-top:0.5rem;">
+        <span class="m-card-title">💼 내 투자 계좌 목록</span>
+      </div>
+      <div id="m-dash-accounts-list">
+        <!-- Rendered via JS -->
+      </div>
+
+      <div class="m-switch-view-bar">
+        <a href="/?view=pc" class="m-switch-view-btn">💻 PC 데스크톱 버전으로 전환</a>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 2: 계좌 현황 & 상세 (Accounts)                              -->
+    <!-- =============================================================== -->
+    <section class="m-container m-view-section" id="m-section-accounts">
+      
+      <!-- A. 계좌 목록 화면 -->
+      <div id="m-accounts-list-wrap">
+        <div class="m-card-header">
+          <span class="m-card-title">💼 투자 계좌 관리</span>
+          <button class="m-btn m-btn-primary m-btn-sm" onclick="mOpenCreateAccountModal()">
+            + 계좌 등록
+          </button>
+        </div>
+        <div id="m-accounts-container">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <!-- B. 계좌 상세 화면 (탭 터치 시 열림) -->
+      <div id="m-account-detail-wrap" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+          <button class="m-btn m-btn-secondary m-btn-sm" onclick="closeAccountDetail()">
+            ← 계좌 목록으로
+          </button>
+          <span class="m-strat-tag" id="m-det-strat">전략</span>
+        </div>
+
+        <div class="m-card" style="margin-bottom:0.75rem;">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">
+            <span class="m-ticker-badge" id="m-det-ticker">SOXL</span>
+            <span style="font-size:1.1rem;font-weight:800;color:#fff;" id="m-det-title">계좌명</span>
+          </div>
+          
+          <div style="font-size:1.6rem;font-weight:800;color:#fff;margin:0.2rem 0;" id="m-det-asset">$0.00</div>
+          <div id="m-det-profit" style="font-size:0.875rem;font-weight:700;">▲ $0.00 (+0.00%)</div>
+
+          <div class="m-grid-2x2">
+            <div class="m-sub-stat">
+              <div class="m-sub-stat-label">보유 현금</div>
+              <div class="m-sub-stat-val" id="m-det-cash">$0.00</div>
+            </div>
+            <div class="m-sub-stat">
+              <div class="m-sub-stat-label">보유 주수</div>
+              <div class="m-sub-stat-val" id="m-det-hold">0 주</div>
+            </div>
+            <div class="m-sub-stat">
+              <div class="m-sub-stat-label">현재 주가</div>
+              <div class="m-sub-stat-val" id="m-det-price">$0.00</div>
+            </div>
+            <div class="m-sub-stat">
+              <div class="m-sub-stat-label">주문 대상일</div>
+              <div class="m-sub-stat-val" id="m-det-date">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4개 서브탭 -->
+        <div class="m-subnav-tabs">
+          <button class="m-subtab-btn active" id="m-subtab-btn-orders" onclick="mSwitchDetailSubtab('orders')">📋 당일 주문표</button>
+          <button class="m-subtab-btn" id="m-subtab-btn-unsold" onclick="mSwitchDetailSubtab('unsold')">📦 미매도 슬롯</button>
+          <button class="m-subtab-btn" id="m-subtab-btn-records" onclick="mSwitchDetailSubtab('records')">📜 매매일지</button>
+          <button class="m-subtab-btn" id="m-subtab-btn-adjustments" onclick="mSwitchDetailSubtab('adjustments')">💵 입출금</button>
+        </div>
+
+        <!-- 서브탭 컨텐츠 영역 -->
+        <div id="m-detail-content-area" style="min-height:160px;margin-bottom:1rem;">
+          <!-- Orders / Unsold / Records rendered via JS -->
+        </div>
+
+        <!-- 계좌 액션 버튼 바 -->
+        <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1rem;">
+          <button class="m-btn m-btn-primary" onclick="mAdvanceDay()">
+            🚀 다음 영업일 진행 (주문표 생성 & 텔레그램 알림)
+          </button>
+          <div style="display:flex;gap:0.5rem;">
+            <button class="m-btn m-btn-success" style="flex:1;" onclick="mOpenSettlementModal()">
+              ✅ 장마감 정산 입력
+            </button>
+            <button class="m-btn m-btn-secondary" style="flex:1;" onclick="mUndoLastTrade()">
+              ↩ 마지막 거래 취소
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 3: 백테스트 시뮬레이터 (Backtest)                           -->
+    <!-- =============================================================== -->
+    <section class="m-container m-view-section" id="m-section-backtest">
+      <div class="m-card-header">
+        <span class="m-card-title">⚡ 백테스트 시뮬레이터</span>
+      </div>
+
+      <div class="m-card">
+        <!-- 종목 선택 칩 -->
+        <div class="m-form-group">
+          <label class="m-form-label">분석 대상 종목 (Ticker)</label>
+          <input type="text" id="m-bt-ticker" class="m-form-input" value="QLD">
+          <div class="m-chips-row" style="margin-top:0.4rem;">
+            <button type="button" class="m-chip" onclick="mQuickFillTicker('QLD')">QLD</button>
+            <button type="button" class="m-chip" onclick="mQuickFillTicker('SSO')">SSO</button>
+            <button type="button" class="m-chip" onclick="mQuickFillTicker('SOXL')">SOXL</button>
+            <button type="button" class="m-chip" onclick="mQuickFillTicker('TQQQ')">TQQQ</button>
+            <button type="button" class="m-chip" onclick="mQuickFillTicker('SCHD')">SCHD</button>
+            <button type="button" class="m-chip" onclick="mQuickFillTicker('UPRO')">UPRO</button>
+          </div>
+        </div>
+
+        <!-- 초기 시드 금액 -->
+        <div class="m-form-group">
+          <label class="m-form-label">초기 시드 금액 (USD)</label>
+          <input type="number" id="m-bt-capital" class="m-form-input" value="100000" step="10000">
+        </div>
+
+        <!-- 기간 프리셋 -->
+        <div class="m-form-group">
+          <label class="m-form-label">시뮬레이션 기간</label>
+          <div class="m-chips-row" style="margin-bottom:0.4rem;">
+            <button type="button" class="m-chip" onclick="mSetBtPeriod(1)">최근 1년</button>
+            <button type="button" class="m-chip active" onclick="mSetBtPeriod(3)">최근 3년</button>
+            <button type="button" class="m-chip" onclick="mSetBtPeriod(5)">최근 5년</button>
+          </div>
+          <div style="display:flex;gap:0.4rem;">
+            <input type="date" id="m-bt-start" class="m-form-input" style="flex:1;">
+            <input type="date" id="m-bt-end" class="m-form-input" style="flex:1;">
+          </div>
+        </div>
+
+        <!-- 비교 전략 체크박스 -->
+        <div class="m-form-group">
+          <label class="m-form-label">비교 분석 전략</label>
+          <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.825rem;">
+            <label style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="checkbox" id="m-strat-jj" checked>
+              <span>⭐ 종종이 3단계 LOC 전략</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="checkbox" id="m-strat-puddle" checked>
+              <span>🌊 <strong>웅덩이 매매법</strong> (이평선 & RSI)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="checkbox" id="m-strat-inf" checked>
+              <span>무한매수법 v4.0</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="checkbox" id="m-strat-vr">
+              <span>VR 5.0 (밸류리밸런싱)</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="checkbox" id="m-strat-bnh" checked>
+              <span>단순보유 (Buy & Hold 벤치마크)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 배당 재투자 토글 -->
+        <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);padding:0.65rem 0.8rem;border-radius:8px;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:700;color:var(--m-profit-green);font-size:0.8rem;">💰 배당금 재투자 반영 (Total Return)</div>
+            <div style="font-size:0.7rem;color:var(--m-text-secondary);">SCHD 등 배당형 ETF 수정주가 적용</div>
+          </div>
+          <input type="checkbox" id="m-bt-adj-close" checked style="width:20px;height:20px;">
+        </div>
+
+        <button class="m-btn m-btn-primary" id="m-btn-run-bt" onclick="mRunBacktest()">
+          🚀 백테스트 실행하기
+        </button>
+      </div>
+
+      <!-- 결과 영역 -->
+      <div id="m-bt-results-wrap" style="display:none;margin-top:1rem;">
+        <div class="m-card-header">
+          <span class="m-card-title">🏆 전략별 핵심 성과 비교</span>
+        </div>
+        <div id="m-bt-cards-list"></div>
+
+        <div class="m-card" style="margin-top:0.75rem;">
+          <div class="m-card-title" style="margin-bottom:0.75rem;">📈 자산 성장 곡선 추이</div>
+          <div style="height:260px;position:relative;">
+            <canvas id="m-bt-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 4: 전략 가이드 (Guide)                                      -->
+    <!-- =============================================================== -->
+    <section class="m-container m-view-section" id="m-section-guide">
+      <div class="m-card-header">
+        <span class="m-card-title">📘 투자 전략 가이드</span>
+      </div>
+
+      <!-- 웅덩이 매매법 가이드 카드 -->
+      <div class="m-card" style="border-left:4px solid var(--m-profit-green);">
+        <div style="font-size:0.95rem;font-weight:800;color:#fff;margin-bottom:0.4rem;">
+          🌊 웅덩이 매매법 (Puddle Strategy)
+        </div>
+        <div style="font-size:0.775rem;color:var(--m-text-secondary);line-height:1.5;">
+          주가가 급락 후 평평한 U자형 바닥(웅덩이)을 형성할 때 이동평균선과 RSI를 활용해 단계적으로 분할 매수하는 우상향 레버리지 ETF(QLD, SSO, TQQQ) 전용 장기 전략입니다.
+        </div>
+        <div style="background:rgba(15,23,42,0.8);border-radius:8px;padding:0.6rem;margin-top:0.6rem;font-size:0.75rem;">
+          <div>• <strong>1차 매수</strong>: 20일선 터치 시 현금 10%를 2회 분할 매수</div>
+          <div>• <strong>2차 매수</strong>: 60일선 터치 시 현금 50%를 5일 균등 매수</div>
+          <div>• <strong>3차 매수</strong>: 120일선 터치 시 현금 50%를 5일 균등 매수</div>
+          <div>• <strong>4차 매수 (찐바닥)</strong>: 120일선 + RSI 35 이하 시 남은 현금 100% 올인 매수</div>
+        </div>
+      </div>
+
+      <!-- 종종이 기본전략 가이드 카드 -->
+      <div class="m-card" style="border-left:4px solid var(--m-accent-cyan);">
+        <div style="font-size:0.95rem;font-weight:800;color:#fff;margin-bottom:0.4rem;">
+          ⭐ 종종이 3단계 LOC 전략
+        </div>
+        <div style="font-size:0.775rem;color:var(--m-text-secondary);line-height:1.5;">
+          SOXL, TQQQ 등 3배 레버리지 ETF의 극심한 변동성을 4분할 매수 및 시장 3단계 모드(Safe, Normal, Risk-off)로 통제하는 동적 리밸런싱 전략입니다.
+        </div>
+        <div style="background:rgba(15,23,42,0.8);border-radius:8px;padding:0.6rem;margin-top:0.6rem;font-size:0.75rem;">
+          <div>• <strong>매수</strong>: 매일 전일 종가 기준 LOC 매수 주문 자동 산출</div>
+          <div>• <strong>매도</strong>: 평단가 +2.75% 도달 시 보유분 지정가 익절</div>
+          <div>• <strong>위기준비금(AK)</strong>: 총자산의 5%를 폭락장 예비금으로 안전 관리</div>
+        </div>
+      </div>
+
+      <!-- 무한매수법 가이드 카드 -->
+      <div class="m-card" style="border-left:4px solid var(--m-accent-blue);">
+        <div style="font-size:0.95rem;font-weight:800;color:#fff;margin-bottom:0.4rem;">
+          ✨ 라오어 무한매수법 v4.0
+        </div>
+        <div style="font-size:0.775rem;color:var(--m-text-secondary);line-height:1.5;">
+          자본금을 40분할하여 매일 절반은 평단가 LOC 매수, 절반은 시가 +5% LOC 매수를 수행하며 10% 수익률 도달 시 전량 익절하는 무지성 기계적 매매법입니다.
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 5: 설정 (Settings)                                          -->
+    <!-- =============================================================== -->
+    <section class="m-container m-view-section" id="m-section-settings">
+      <div class="m-card-header">
+        <span class="m-card-title">⚙️ 시스템 연동 및 설정</span>
+      </div>
+
+      <!-- 텔레그램 연동 -->
+      <div class="m-card">
+        <div style="font-size:0.9rem;font-weight:800;color:#fff;margin-bottom:0.5rem;">
+          ✈️ 텔레그램 주문 알림
+        </div>
+        <div class="m-form-group">
+          <label class="m-form-label">봇 토큰 (Bot Token)</label>
+          <input type="password" id="m-tg-token" class="m-form-input" placeholder="123456789:ABCdef...">
+        </div>
+        <div class="m-form-group">
+          <label class="m-form-label">챗 아이디 (Chat ID)</label>
+          <input type="text" id="m-tg-chatid" class="m-form-input" placeholder="숫자 ID">
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+          <input type="checkbox" id="m-tg-enabled" checked style="width:18px;height:18px;">
+          <label for="m-tg-enabled" style="font-size:0.8rem;color:var(--m-text-secondary);">주문표 생성 시 텔레그램 메시지 알림 받기</label>
+        </div>
+        <div style="display:flex;gap:0.4rem;">
+          <button class="m-btn m-btn-primary m-btn-sm" style="flex:1;" onclick="mSaveTelegram()">저장</button>
+          <button class="m-btn m-btn-secondary m-btn-sm" style="flex:1;" onclick="mTestTelegram()">테스트 발송</button>
+        </div>
+      </div>
+
+      <!-- 구글 드라이브 동기화 -->
+      <div class="m-card">
+        <div style="font-size:0.9rem;font-weight:800;color:#fff;margin-bottom:0.5rem;">
+          ☁️ 구글 드라이브 동기화
+        </div>
+        <div class="m-form-group">
+          <label class="m-form-label">Google Apps Script 배포 URL</label>
+          <input type="url" id="m-cs-url" class="m-form-input" placeholder="https://script.google.com/macros/s/...">
+        </div>
+        <button class="m-btn m-btn-secondary" onclick="mSyncGoogleDrive()">
+          🔄 지금 구글 드라이브 동기화 실행
+        </button>
+      </div>
+
+      <!-- 오라클 자동매매 봇 -->
+      <div class="m-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <div style="font-size:0.9rem;font-weight:800;color:#fff;">🤖 오라클 자동매매 봇</div>
+          <span class="m-badge m-badge-neutral" id="m-at-status-badge">비활성화</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--m-text-secondary);margin-bottom:0.75rem;">
+          매일 미국 장 개장 전 자동으로 당일 주문표를 연산하고 텔레그램으로 전송합니다.
+        </div>
+        <button class="m-btn m-btn-primary m-btn-sm" onclick="mToggleAutotrade()">
+          자동매매 봇 상태 토글
+        </button>
+        <input type="checkbox" id="m-at-toggle" style="display:none;">
+      </div>
+
+      <div class="m-switch-view-bar" style="margin-top:2rem;">
+        <a href="/?view=pc" class="m-switch-view-btn">💻 PC 데스크톱 버전으로 보기</a>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- Bottom Navigation Bar                                           -->
+    <!-- =============================================================== -->
+    <nav class="m-bottom-nav" id="m-bottom-nav">
+      <button class="m-nav-item active" id="m-nav-dashboard" onclick="mSwitchTab('dashboard')">
+        <span class="m-nav-icon">📊</span>
+        <span>홈</span>
+      </button>
+      <button class="m-nav-item" id="m-nav-accounts" onclick="mSwitchTab('accounts')">
+        <span class="m-nav-icon">💼</span>
+        <span>계좌</span>
+      </button>
+      <button class="m-nav-item" id="m-nav-backtest" onclick="mSwitchTab('backtest')">
+        <span class="m-nav-icon">⚡</span>
+        <span>백테스트</span>
+      </button>
+      <button class="m-nav-item" id="m-nav-guide" onclick="mSwitchTab('guide')">
+        <span class="m-nav-icon">📘</span>
+        <span>가이드</span>
+      </button>
+      <button class="m-nav-item" id="m-nav-settings" onclick="mSwitchTab('settings')">
+        <span class="m-nav-icon">⚙️</span>
+        <span>설정</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- =============================================================== -->
+  <!-- MODAL: 장마감 정산 바텀시트                                     -->
+  <!-- =============================================================== -->
+  <div class="m-modal-overlay" id="m-modal-settle" onclick="if(event.target===this) mCloseModal('m-modal-settle')">
+    <div class="m-bottom-sheet">
+      <div class="m-sheet-header">
+        <span class="m-sheet-title">✅ 장마감 정산 입력</span>
+        <button class="m-sheet-close" onclick="mCloseModal('m-modal-settle')">×</button>
+      </div>
+      <form onsubmit="mSubmitSettlement(event)">
+        <div class="m-form-group">
+          <label class="m-form-label">당일 종가 (Close Price, $)</label>
+          <input type="number" step="0.01" id="m-settle-close" class="m-form-input" required>
+        </div>
+        <div class="m-form-group">
+          <label class="m-form-label">당일 체결된 매수 수량 (주)</label>
+          <input type="number" id="m-settle-buy-qty" class="m-form-input" placeholder="0">
+        </div>
+        <div class="m-form-group">
+          <label class="m-form-label">매수 체결 단가 ($)</label>
+          <input type="number" step="0.01" id="m-settle-buy-price" class="m-form-input">
+        </div>
+        <div class="m-form-group">
+          <label class="m-form-label">당일 체결된 매도 수량 (주)</label>
+          <input type="number" id="m-settle-sell-qty" class="m-form-input" placeholder="0">
+        </div>
+        <div class="m-form-group" style="margin-bottom:1.25rem;">
+          <label class="m-form-label">매도 체결 단가 ($)</label>
+          <input type="number" step="0.01" id="m-settle-sell-price" class="m-form-input">
+        </div>
+        <button type="submit" class="m-btn m-btn-primary">
+          정산 확정하기
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div class="m-toast" id="m-toast-box"></div>
+
+  <!-- Mobile JavaScript -->
+  <script src="/static/js/mobile.js"></script>
+</body>
+</html>
