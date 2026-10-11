@@ -35,12 +35,14 @@ document.addEventListener('DOMContentLoaded', () => {
   initTickerRibbon();
   loadServerStatus();
   loadAccounts();
+  loadCloudSyncStatus();
   initBacktestPresets();
 
   // 15초마다 서버 및 시세 상태 폴링
   setInterval(() => {
     loadServerStatus();
     loadAccounts(true);
+    loadCloudSyncStatus();
   }, 15000);
 });
 
@@ -998,4 +1000,89 @@ function showToast(msg, type = 'info') {
     toast.style.transform = 'translateY(10px)';
     setTimeout(() => toast.remove(), 300);
   }, 3500);
+}
+
+// -------------------------------------------------------------------
+// 구글 드라이브 (GAS) 클라우드 동기화
+// -------------------------------------------------------------------
+async function triggerCloudSync() {
+  const btn = document.getElementById('btn-cloud-sync');
+  const label = document.getElementById('cloud-sync-label');
+  const oldText = label ? label.textContent : '';
+  if (label) label.textContent = '동기화 중...';
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/sync/pull', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || '구글 드라이브와 동기화 완료!');
+      await loadAccounts();
+    } else {
+      showToast(`동기화 실패: ${data.message}`, 'error');
+    }
+  } catch (e) {
+    showToast('구글 동기화 요청 실패', 'error');
+  } finally {
+    if (label) label.textContent = oldText;
+    if (btn) btn.disabled = false;
+    loadCloudSyncStatus();
+  }
+}
+
+async function loadCloudSyncStatus() {
+  try {
+    const res = await fetch('/api/sync/status');
+    const data = await res.json();
+    const label = document.getElementById('cloud-sync-label');
+    if (label && data.last_sync_time) {
+      const timeStr = data.last_sync_time.substring(11, 16);
+      label.textContent = `구글 동기화 (${timeStr})`;
+    }
+  } catch (e) {}
+}
+
+async function openSyncSettingsModal() {
+  try {
+    const res = await fetch('/api/sync/status');
+    const data = await res.json();
+    document.getElementById('sync-gas-url').value = data.url || '';
+    document.getElementById('sync-enabled-check').checked = Boolean(data.enabled);
+    const statusText = document.getElementById('sync-modal-status-text');
+    if (statusText) {
+      statusText.textContent = data.enabled ? '활성화됨 (Active)' : '비활성화됨 (Disabled)';
+      statusText.style.color = data.enabled ? 'var(--profit-green)' : 'var(--text-muted)';
+    }
+    const lastTime = document.getElementById('sync-modal-last-time');
+    if (lastTime) lastTime.textContent = data.last_sync_time || '동기화 이력 없음';
+    const lastMsg = document.getElementById('sync-modal-last-msg');
+    if (lastMsg) lastMsg.textContent = data.last_sync_message || '';
+
+    document.getElementById('cloudSyncModal').classList.add('active');
+  } catch (e) {
+    showToast('동기화 설정을 불러오지 못했습니다.', 'error');
+  }
+}
+
+async function saveSyncSettings() {
+  const url = document.getElementById('sync-gas-url').value.trim();
+  const enabled = document.getElementById('sync-enabled-check').checked;
+
+  try {
+    const res = await fetch('/api/sync/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, enabled })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('구글 동기화 설정이 저장되고 동기화되었습니다!');
+      closeModal('cloudSyncModal');
+      await loadAccounts();
+    } else {
+      showToast(`동기화 실패: ${data.message}`, 'error');
+    }
+  } catch (e) {
+    showToast('설정 저장 실패', 'error');
+  }
 }

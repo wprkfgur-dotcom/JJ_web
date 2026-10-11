@@ -49,8 +49,14 @@
         </button>
       </nav>
 
-      <!-- Right Header Actions (Market Status) -->
+      <!-- Right Header Actions (Cloud Sync & Market Status) -->
       <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" id="btn-cloud-sync" onclick="triggerCloudSync()" title="구글 드라이브(GAS) 실시간 동기화">
+          <span>🔄</span> <span id="cloud-sync-label">구글 동기화</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openSyncSettingsModal()" title="동기화 설정">
+          <span>⚙️</span>
+        </button>
         <div class="market-badge" id="market-badge">
           <span class="status-dot closed"></span>
           <span>상태 조회 중...</span>
@@ -560,6 +566,43 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('adjustmentModal')">취소</button>
         <button class="btn btn-primary" onclick="submitAdjustment()">저장하기</button>
+      </div>
+    </div>
+  <!-- 5. 구글 드라이브 클라우드 동기화 모달 -->
+  <div class="modal-overlay" id="cloudSyncModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>구글 드라이브 (GAS) 클라우드 동기화 설정</h2>
+        <button class="btn-close" onclick="closeModal('cloudSyncModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(15,23,42,0.8);padding:1rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);margin-bottom:1rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.85rem;">
+            <span style="color:var(--text-muted);">동기화 연동 상태:</span>
+            <span id="sync-modal-status-text" style="color:var(--profit-green);font-weight:700;">활성화됨 (Active)</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.85rem;">
+            <span style="color:var(--text-muted);">최근 동기화 일시:</span>
+            <span id="sync-modal-last-time">-</span>
+          </div>
+          <div style="font-size:0.775rem;color:var(--text-muted);margin-top:0.3rem;" id="sync-modal-last-msg"></div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>Google Apps Script Web App URL</label>
+          <input type="text" id="sync-gas-url" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="sync-enabled-check" checked>
+            <span>Google Drive 자동 동기화 활성화</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('cloudSyncModal')">닫기</button>
+        <button class="btn btn-primary" onclick="saveSyncSettings()">저장 및 즉시 동기화</button>
       </div>
     </div>
   </div>

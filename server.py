@@ -56,6 +56,16 @@ from core.data import fetch_market_data, get_stock_price_for_date, get_exact_pri
 from core.backtest_runner import run_strategies, build_chart_series
 from core.strategy_registry import ACCOUNT_STRATEGY_OPTIONS, DISPLAY_NAMES, JONGJONG, INFINITE, VR
 from core.market_calendar import get_next_trading_day, is_us_trading_day
+from core.cloud_sync import (
+    is_sync_enabled,
+    sync_local_with_drive,
+    upload_accounts_to_drive,
+    get_sync_config,
+    save_sync_config,
+    test_connection
+)
+import threading
+import time
 
 # -------------------------------------------------------------------
 # FastAPI 앱 인스턴스
@@ -541,6 +551,80 @@ async def toggle_autotrade():
         "msg": f"자동매매 상태 변경: {status_str}"
     })
     return sanitize_for_json(AUTOTRADE_STATE)
+
+
+# -------------------------------------------------------------------
+# Google Apps Script (Google Drive) 클라우드 동기화 라우트
+# -------------------------------------------------------------------
+class SyncConfigRequest(BaseModel):
+    url: str
+    enabled: bool = True
+
+
+@app.get("/api/sync/status")
+async def get_sync_status():
+    """구글 드라이브 클라우드 동기화 상태 반환"""
+    cfg = get_sync_config()
+    return {
+        "enabled": is_sync_enabled(),
+        "url": cfg.get("web_app_url", ""),
+        "last_sync_time": cfg.get("last_sync_time"),
+        "last_sync_status": cfg.get("last_sync_status"),
+        "last_sync_message": cfg.get("last_sync_message"),
+    }
+
+
+@app.post("/api/sync/pull")
+async def sync_pull_from_drive():
+    """구글 드라이브에서 최신 계좌 데이터 수동 다운로드 및 동기화"""
+    ok, msg = sync_local_with_drive(am)
+    return {"success": ok, "message": msg}
+
+
+@app.post("/api/sync/push")
+async def sync_push_to_drive():
+    """로컬 계좌 데이터를 구글 드라이브로 수동 업로드"""
+    accounts = am.load_accounts()
+    ok, msg = upload_accounts_to_drive(accounts)
+    return {"success": ok, "message": msg}
+
+
+@app.post("/api/sync/config")
+async def update_sync_config(req: SyncConfigRequest):
+    """구글 Apps Script Web App URL 및 활성화 여부 설정"""
+    cfg = get_sync_config()
+    cfg["web_app_url"] = req.url.strip()
+    cfg["sync_enabled"] = req.enabled
+    save_sync_config(cfg)
+    ok, msg = sync_local_with_drive(am)
+    return {"success": ok, "message": msg, "config": cfg}
+
+
+def background_cloud_sync_worker():
+    """5분마다 구글 드라이브와 계좌 자동 양방향 동기화"""
+    time.sleep(3)  # 앱 시작 직후 3초 대기
+    if is_sync_enabled():
+        try:
+            print("[CloudSync] 서버 시작 시 구글 드라이브 계좌 자동 동기화 시도...")
+            ok, msg = sync_local_with_drive(am)
+            print(f"[CloudSync] 시작 동기화 결과: {ok} ({msg})")
+        except Exception as e:
+            print(f"[CloudSync] 시작 동기화 오류: {e}")
+
+    while True:
+        time.sleep(300)  # 5분 주기
+        if is_sync_enabled():
+            try:
+                ok, msg = sync_local_with_drive(am)
+                if ok:
+                    print(f"[CloudSync Periodic] 자동 동기화 성공: {msg}")
+            except Exception as e:
+                print(f"[CloudSync Periodic] 주기적 동기화 오류: {e}")
+
+
+# 백그라운드 동기화 스레드 시작
+sync_thread = threading.Thread(target=background_cloud_sync_worker, daemon=True)
+sync_thread.start()
 
 
 # -------------------------------------------------------------------
