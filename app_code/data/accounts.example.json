@@ -1,0 +1,21 @@
+[
+  {
+    "id": "acc_sample_01",
+    "name": "SOXL 종종이 1호 (예시)",
+    "strategy": "종종이 기본전략",
+    "ticker": "SOXL",
+    "start_date": "2026-09-29",
+    "initial_seed": 100000.0,
+    "reserve_ratio": 0.05,
+    "memo": "메인 운용 계좌 예시",
+    "created_at": "2026-09-29 00:00:00",
+    "adjustments": [],
+    "trade_records": [],
+    "current_date": "2026-09-29",
+    "operational_state": "WAITING_FOR_FILL",
+    "current_cash": 100000.0,
+    "current_holdings": 0,
+    "total_asset": 100000.0,
+    "current_price": 0.0
+  }
+]

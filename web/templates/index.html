@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JJ Invest ⚡ 종종이 투자 & 백테스트 플랫폼</title>
+  <meta name="description" content="미국 레버리지 ETF 종종이 3단계 LOC & 무한매수법 자산 현황 및 백테스트 웹 플랫폼">
+  
+  <!-- Font & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="navbar-container">
+      <a href="#" class="brand" onclick="switchTab('dashboard'); return false;">
+        <div class="brand-icon">⚡</div>
+        <div class="brand-text">
+          <h1>JJ INVEST</h1>
+          <span>종종이 & 무한매수 운용 시스템</span>
+        </div>
+      </a>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" role="tablist">
+        <button class="tab-btn active" data-tab="dashboard" id="tab-btn-dashboard">
+          <span>📊</span> 대시보드
+        </button>
+        <button class="tab-btn" data-tab="accounts" id="tab-btn-accounts">
+          <span>💼</span> 계좌 현황
+        </button>
+        <button class="tab-btn" data-tab="backtest" id="tab-btn-backtest">
+          <span>⚡</span> 백테스트
+        </button>
+        <button class="tab-btn" data-tab="guide" id="tab-btn-guide">
+          <span>📘</span> 전략 가이드
+        </button>
+        <button class="tab-btn" data-tab="autotrade" id="tab-btn-autotrade">
+          <span>🤖</span> 오라클 자동매매
+        </button>
+      </nav>
+
+      <!-- Right Header Actions (Market Status) -->
+      <div class="header-actions">
+        <div class="market-badge" id="market-badge">
+          <span class="status-dot closed"></span>
+          <span>상태 조회 중...</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main>
+    <!-- Live Ticker Ribbon -->
+    <div class="ticker-ribbon" id="ticker-ribbon">
+      <!-- Ticker chips rendered via JavaScript -->
+    </div>
+
+    <!-- =============================================================== -->
+    <!-- TAB 1: 대시보드 (Dashboard)                                     -->
+    <!-- =============================================================== -->
+    <section class="tab-panel active" id="tab-dashboard">
+      <!-- KPI Metric Cards -->
+      <div class="kpi-grid">
+        <div class="kpi-card highlight">
+          <div class="kpi-title">
+            <span>총 평가자산</span>
+            <span>💎</span>
+          </div>
+          <div class="kpi-value" id="kpi-total-asset">$0.00</div>
+          <div class="kpi-sub">
+            <span id="kpi-total-return" class="pos">+0.00%</span>
+            <span>(손익: <span id="kpi-total-profit">$0.00</span>)</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>보유 예수금 (현금)</span>
+            <span>💵</span>
+          </div>
+          <div class="kpi-value" id="kpi-total-cash">$0.00</div>
+          <div class="kpi-sub">
+            <span id="kpi-cash-ratio" style="color:var(--accent-cyan);">현금 비중 0%</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>총 투자원금 (시드)</span>
+            <span>🌱</span>
+          </div>
+          <div class="kpi-value" id="kpi-total-seed">$0.00</div>
+          <div class="kpi-sub">
+            <span id="kpi-account-count">0개 운용 중</span>
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-title">
+            <span>오라클 서버 상태</span>
+            <span>🐧</span>
+          </div>
+          <div class="kpi-value" style="font-size:1.25rem;color:var(--accent-cyan);margin-top:0.3rem;" id="bot-status-text">
+            IDLE (대기중)
+          </div>
+          <div class="kpi-sub">
+            <span>Ubuntu Linux 무중단 데몬</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Main Section (Orders & Asset Allocation) -->
+      <div style="display:grid;grid-template-columns: 2fr 1fr;gap:1.25rem;margin-bottom:2rem;" class="dash-split-grid">
+        <!-- Left: Today's Order Sheet -->
+        <div class="order-table-container">
+          <div class="section-header">
+            <div class="section-title">
+              <span>📋</span> 오늘의 LOC 순 주문표 (퉁치기 상계 반영)
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadAccounts()">🔄 새로고침</button>
+          </div>
+          <div id="dashboard-orders-container">
+            <div style="padding:2rem;text-align:center;color:var(--text-muted);">주문 목록을 로드하는 중...</div>
+          </div>
+        </div>
+
+        <!-- Right: Asset Allocation Donut Chart -->
+        <div class="chart-card">
+          <div class="section-header">
+            <div class="section-title">
+              <span>🥧</span> 계좌별 자산 비중
+            </div>
+          </div>
+          <div class="chart-wrapper-sm">
+            <canvas id="allocationDonutChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 2: 계좌 현황 (Accounts)                                     -->
+    <!-- =============================================================== -->
+    <section class="tab-panel" id="tab-accounts">
+      <div class="section-header">
+        <div class="section-title">
+          <span>💼</span> 내 투자 계좌 목록
+        </div>
+        <button class="btn btn-primary" onclick="openNewAccountModal()">+ 새 계좌 추가</button>
+      </div>
+
+      <div class="accounts-grid" id="accounts-grid">
+        <!-- Account cards rendered via JavaScript -->
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 3: 백테스트 시뮬레이터 (Backtest)                           -->
+    <!-- =============================================================== -->
+    <section class="tab-panel" id="tab-backtest">
+      <div class="backtest-panel">
+        <div class="section-header">
+          <div class="section-title">
+            <span>⚡</span> 종종이 & 전략별 백테스트 시뮬레이터
+          </div>
+        </div>
+
+        <!-- Form Grid -->
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="bt-ticker">분석 종목 (Ticker)</label>
+            <input type="text" id="bt-ticker" class="form-input" value="SOXL">
+            <div class="chips-row">
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('SOXL')">SOXL</button>
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('TQQQ')">TQQQ</button>
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('QLD')">QLD</button>
+              <button type="button" class="chip-btn" onclick="quickFillBacktest('UPRO')">UPRO</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="bt-capital">초기 시드 금액 (USD)</label>
+            <input type="number" id="bt-capital" class="form-input" value="100000" step="10000">
+            <div class="chips-row">
+              <button type="button" class="chip-btn" onclick="document.getElementById('bt-capital').value='50000'">$50K</button>
+              <button type="button" class="chip-btn" onclick="document.getElementById('bt-capital').value='100000'">$100K</button>
+              <button type="button" class="chip-btn" onclick="document.getElementById('bt-capital').value='200000'">$200K</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>시뮬레이션 기간 프리셋</label>
+            <div class="chips-row" style="margin-top:0.4rem;">
+              <button type="button" class="chip-btn preset-period-btn" data-years="1">최근 1년</button>
+              <button type="button" class="chip-btn preset-period-btn active" data-years="3">최근 3년</button>
+              <button type="button" class="chip-btn preset-period-btn" data-years="5">최근 5년</button>
+            </div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+              <input type="date" id="bt-start-date" class="form-input" style="flex:1;">
+              <input type="date" id="bt-end-date" class="form-input" style="flex:1;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Strategy Checkboxes -->
+        <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:0.5rem;">
+          비교 분석할 전략 선택
+        </label>
+        <div class="strategy-checkboxes">
+          <label class="checkbox-label">
+            <input type="checkbox" id="strat-jj" checked>
+            <span><strong>⭐ 종종이 3단계 LOC 전략</strong> (위기준비금 AK 5%)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="strat-inf" checked>
+            <span>무한매수법 v4.0 (40분할)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="strat-vr" checked>
+            <span>VR 5.0 (밸류리밸런싱)</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="strat-bnh" checked>
+            <span>단순보유 (Buy & Hold 벤치마크)</span>
+          </label>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:1rem;">
+          <span id="bt-loader" style="display:none;align-items:center;gap:0.5rem;font-size:0.85rem;color:var(--accent-cyan);">
+            ⏳ 야후 파이낸스 시세 분석 및 시뮬레이션 계산 중...
+          </span>
+          <button class="btn btn-primary" id="btn-run-backtest" onclick="runBacktest()">
+            🚀 백테스트 실행하기
+          </button>
+        </div>
+      </div>
+
+      <!-- Backtest Results Display -->
+      <div id="backtest-results-container" style="display:none;">
+        <!-- Comparison Table -->
+        <div class="order-table-container">
+          <div class="section-header">
+            <div class="section-title">
+              <span>🏆</span> 전략별 핵심 성과 지표 비교
+            </div>
+          </div>
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>전략명</th>
+                <th>최종 자산</th>
+                <th>총 수익률</th>
+                <th>연평균 (CAGR)</th>
+                <th>최대 낙폭 (MDD)</th>
+                <th>샤프 지수</th>
+                <th>칼마 비율</th>
+                <th>최종 현금</th>
+              </tr>
+            </thead>
+            <tbody id="bt-comparison-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Equity Curve Chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="section-title">
+              <span>📈</span> 자산 성장 곡선 (Equity Curve)
+            </div>
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+              <label class="checkbox-label" style="font-size:0.8rem;">
+                <input type="checkbox" id="bt-log-scale" onchange="toggleLogScale()">
+                <span>로그 스케일 (Log Scale)</span>
+              </label>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="equityCurveChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Drawdown Chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="section-title">
+              <span>🌊</span> 최대 낙폭 추이 (Underwater Drawdown)
+            </div>
+          </div>
+          <div class="chart-wrapper-sm">
+            <canvas id="drawdownChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 4: 전략 가이드 (Strategy Guide)                             -->
+    <!-- =============================================================== -->
+    <section class="tab-panel" id="tab-guide">
+      <div class="section-header">
+        <div class="section-title">
+          <span>📘</span> 종종이(JJ) 3단계 LOC 매매 전략 가이드
+        </div>
+      </div>
+
+      <div class="guide-grid">
+        <div class="guide-card">
+          <h3><span>🛡️</span> 1. 위기준비금(AK) 시스템</h3>
+          <p>
+            종종이 전략은 계좌 개설 시 설정한 <strong>위기준비금 비율(기본 5%)</strong>을 평상시에는 엄격히 격리 보관합니다.
+          </p>
+          <ul class="guide-step-list">
+            <li><strong>평상시 (Normal/Safe)</strong>: 시드의 5%를 현금 안전자산(AK)으로 격리하고, 나머지 95%(AR)로 8분할 운용합니다.</li>
+            <li><strong>급락장 (Risk-Off)</strong>: 시장이 폭락 구간에 진입하면 누적된 위기준비금을 투자금(AR)에 전액 병합하여 바닥권에서 공격적으로 추가 매수합니다.</li>
+          </ul>
+        </div>
+
+        <div class="guide-card">
+          <h3><span>⚡</span> 2. 3단계 시장 모드 (Safe / Normal / Risk-Off)</h3>
+          <p>
+            과거 3일간의 종가 추세 및 변동성을 분석하여 매일 장전에 시장 모드를 자동 판정합니다.
+          </p>
+          <ul class="guide-step-list">
+            <li><strong>Safe 모드</strong>: 안정적인 상승/횡보장. 4분할 LOC 매수, +2.75% 익절 청산.</li>
+            <li><strong>Normal 모드</strong>: 통상적인 변동성 장세. 기본 4분할 LOC 매수 집행.</li>
+            <li><strong>Risk-Off 모드</strong>: 연속 급락 위기장. 매수 간격을 넓히고 위기준비금을 가동하여 리스크 방어.</li>
+          </ul>
+        </div>
+
+        <div class="guide-card">
+          <h3><span>⚖️</span> 3. 당일 순 주문표 & 퉁치기(상계) 엔진</h3>
+          <p>
+            장전에 걸어야 할 익절 LOC 매도 주문과 신규 LOC 매수 주문의 가격대가 겹칠 경우, 불필요한 양방향 체결 수수료를 방지합니다.
+          </p>
+          <ul class="guide-step-list">
+            <li>동일 또는 인접 호가대의 매수/매도 수량을 <strong>차감 상계(Netting)</strong>하여 순 주문만 도출합니다.</li>
+            <li>미국 주식 정규장 시작 전에 키움/한투 등 HTS/MTS에 당일 주문표를 그대로 등록하면 하루 5분 운용이 완성됩니다.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- TAB 5: 오라클 자동매매 (Auto Trading Status & Oracle Deploy)   -->
+    <!-- =============================================================== -->
+    <section class="tab-panel" id="tab-autotrade">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🤖</span> 오라클 클라우드 (Ubuntu Linux) 자동매매 엔진
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns: 1fr 1fr;gap:1.25rem;" class="autotrade-grid">
+        <!-- Left: Status & Controls -->
+        <div class="kpi-card" style="display:flex;flex-direction:column;gap:1rem;">
+          <div>
+            <h3 style="font-size:1.1rem;margin-bottom:0.5rem;color:var(--accent-cyan);">서버 데몬 제어</h3>
+            <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.6;">
+              오라클 클라우드 우분투 인스턴스에서 백그라운드 서비스(systemd)로 24시간 자율 가동됩니다.
+              정규장 시작 전 주문표 산출 및 장마감 후 자동 정산을 수행하도록 확장할 수 있습니다.
+            </p>
+          </div>
+
+          <div style="background:rgba(15,23,42,0.8);padding:1rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;font-size:0.85rem;">
+              <span style="color:var(--text-muted);">데몬 실행 주기:</span>
+              <span>미국 장전 (22:30 KST) / 장후 (05:00 KST)</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+              <span style="color:var(--text-muted);">서버 OS 플랫폼:</span>
+              <span style="color:var(--accent-cyan);">Oracle Linux / Ubuntu 22.04 LTS 호환</span>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:0.75rem;">
+            <button class="btn btn-success" id="btn-bot-toggle" onclick="toggleAutotrade()">자동매매 시작</button>
+            <button class="btn btn-secondary" onclick="loadServerStatus()">상태 새로고침</button>
+          </div>
+        </div>
+
+        <!-- Right: Oracle Ubuntu Deployment Guide -->
+        <div class="guide-card">
+          <h3><span>🐧</span> 오라클 우분투 서버 복사 및 구동 3단계</h3>
+          <ul class="guide-step-list">
+            <li>
+              <strong>1. 프로젝트 폴더 복사</strong><br>
+              로컬에서 개발 완료 후 <code>c:\oracle_web_server</code> 폴더를 오라클 우분투 서버(SCP 또는 Git)로 복사합니다.
+            </li>
+            <li>
+              <strong>2. 원클릭 셋업 스크립트 실행</strong><br>
+              <code>bash deploy_oracle_ubuntu.sh</code> 실행 시 Python venv, 패키지 설치, 방화벽 개방 및 systemd 서비스 등록이 전자동 완료됩니다.
+            </li>
+            <li>
+              <strong>3. 서비스 자동 시작 및 브라우저 접속</strong><br>
+              <code>sudo systemctl start jj_invest</code><br>
+              오라클 공인 IP (http://&lt;오라클IP&gt;:8000)로 어디서든 모바일/PC 접속 가능합니다.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- =============================================================== -->
+  <!-- MODALS                                                          -->
+  <!-- =============================================================== -->
+
+  <!-- 1. 계좌 상세 모달 -->
+  <div class="modal-overlay" id="accountDetailModal">
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h2 id="modal-acc-title">계좌 상세</h2>
+        <button class="btn-close" onclick="closeModal('accountDetailModal')">&times;</button>
+      </div>
+
+      <!-- Sub Navigation inside Modal -->
+      <div style="padding:0.5rem 1.5rem;background:rgba(15,23,42,0.9);border-bottom:1px solid var(--border-subtle);display:flex;gap:0.5rem;overflow-x:auto;">
+        <button class="tab-btn detail-subtab-btn active" data-subtab="orders" onclick="switchDetailSubTab('orders')">📋 당일 주문표 & 정산</button>
+        <button class="tab-btn detail-subtab-btn" data-subtab="unsold" onclick="switchDetailSubTab('unsold')">📦 미매도 보유 슬롯</button>
+        <button class="tab-btn detail-subtab-btn" data-subtab="records" onclick="switchDetailSubTab('records')">📜 매매 일지</button>
+        <button class="tab-btn detail-subtab-btn" data-subtab="adjustments" onclick="switchDetailSubTab('adjustments')">💰 입출금 관리</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="detail-subtab-pane active" id="subtab-orders"></div>
+        <div class="detail-subtab-pane" id="subtab-unsold"></div>
+        <div class="detail-subtab-pane" id="subtab-records"></div>
+        <div class="detail-subtab-pane" id="subtab-adjustments"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('accountDetailModal')">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 신규 계좌 개설 모달 -->
+  <div class="modal-overlay" id="newAccountModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>새 투자 계좌 개설</h2>
+        <button class="btn-close" onclick="closeModal('newAccountModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>계좌 별칭 (Name)</label>
+          <input type="text" id="new-acc-name" class="form-input" placeholder="예: SOXL 종종이 2호">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>종목 티커 (Ticker)</label>
+          <input type="text" id="new-acc-ticker" class="form-input" value="SOXL">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>적용 전략 (Strategy)</label>
+          <select id="new-acc-strategy" class="form-select">
+            <option value="종종이 기본전략">종종이 기본전략 (3단계 & 4분할 LOC)</option>
+            <option value="무한매수법 v4.0">라오어 무한매수법 v4.0</option>
+            <option value="VR 5.0 (밸류리밸런싱)">VR 5.0 (밸류리밸런싱)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>초기 시드 (USD)</label>
+          <input type="number" id="new-acc-seed" class="form-input" value="100000" step="5000">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>운용 시작일</label>
+          <input type="date" id="new-acc-start-date" class="form-input">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>위기준비금 비율 (기본 0.05 = 5%)</label>
+          <input type="number" id="new-acc-reserve" class="form-input" value="0.05" step="0.01" min="0" max="0.5">
+        </div>
+        <div class="form-group">
+          <label>메모 (선택사항)</label>
+          <input type="text" id="new-acc-memo" class="form-input" placeholder="계좌 운용 목적 등">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('newAccountModal')">취소</button>
+        <button class="btn btn-primary" onclick="submitNewAccount()">계좌 생성</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 당일 종가 & 체결 정산 모달 -->
+  <div class="modal-overlay" id="settlementModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>일일 마감 정산 (종가 & 체결 입력)</h2>
+        <button class="btn-close" onclick="closeModal('settlementModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="settle-acc-id">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>당일 마감 종가 (USD) *</label>
+          <input type="number" id="settle-close-price" class="form-input" step="0.01" placeholder="예: 45.60">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>실제 매수 체결 수량 (주)</label>
+          <input type="number" id="settle-buy-qty" class="form-input" value="0" min="0">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>실제 매도 체결 수량 (주)</label>
+          <input type="number" id="settle-sell-qty" class="form-input" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>정산 메모</label>
+          <input type="text" id="settle-memo" class="form-input" placeholder="특이사항 메모">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('settlementModal')">취소</button>
+        <button class="btn btn-primary" onclick="submitSettlement()">정산 완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 입출금 모달 -->
+  <div class="modal-overlay" id="adjustmentModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>계좌 자산 입금 / 출금</h2>
+        <button class="btn-close" onclick="closeModal('adjustmentModal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="adj-acc-id">
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>구분</label>
+          <select id="adj-type" class="form-select">
+            <option value="DEPOSIT">입금 (시드 추가)</option>
+            <option value="WITHDRAW">출금 (수익 인출, 세금 납부 등)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>금액 (USD) *</label>
+          <input type="number" id="adj-amount" class="form-input" step="100" placeholder="1000">
+        </div>
+        <div class="form-group" style="margin-bottom:1rem;">
+          <label>일자</label>
+          <input type="date" id="adj-date" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>사유 / 비고</label>
+          <input type="text" id="adj-reason" class="form-input" placeholder="예: 해외주식 양도소득세 인출">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('adjustmentModal')">취소</button>
+        <button class="btn btn-primary" onclick="submitAdjustment()">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 알림 컨테이너 -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Script -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
