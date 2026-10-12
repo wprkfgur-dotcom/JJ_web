@@ -144,8 +144,10 @@ async def get_account_detail(acc_id: str, request: Request):
     details_clean = {k: v for k, v in details.items() if k != "df_res"}
 
     trade_records = target.get("trade_records", [])
+    acc_copy = dict(target)
+    acc_copy["mode"] = details_clean.get("mode", "Normal")
     return sanitize_for_json({
-        "account": target,
+        "account": acc_copy,
         "details": details_clean,
         "summary": details_clean,
         "orders": {

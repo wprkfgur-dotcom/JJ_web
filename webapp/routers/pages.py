@@ -25,7 +25,12 @@ def _page(filename: str, missing_detail: str, view_cookie: str = None) -> FileRe
     path = TEMPLATE_DIR / filename
     if not path.exists():
         raise HTTPException(status_code=404, detail=missing_detail)
-    resp = FileResponse(path)
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+    resp = FileResponse(path, headers=headers)
     if view_cookie:
         resp.set_cookie("view_mode", view_cookie, max_age=COOKIE_MAX_AGE)
     return resp

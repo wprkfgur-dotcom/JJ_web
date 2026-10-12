@@ -29,6 +29,17 @@ const fmt = {
   num: (v) => (Number(v) || 0).toLocaleString(),
 };
 
+// 주문 정보 정규화 헬퍼 (영문/한글 필드 호환)
+function parseOrderItem(o, defaultMemo = '') {
+  if (!o) return { p: 0, q: 0, a: 0, m: defaultMemo };
+  const p = o.price !== undefined ? Number(o.price) : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
+  const q = o.qty !== undefined ? Number(o.qty) : (o.shares !== undefined ? Number(o.shares) : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
+  const a = o.amount !== undefined ? Number(o.amount) : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
+  const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || o['호가단계'] || defaultMemo;
+  return { p, q, a, m };
+}
+window.parseOrderItem = parseOrderItem;
+
 // -------------------------------------------------------------------
 // 사용자 인증 및 세션 제어
 // -------------------------------------------------------------------
@@ -558,15 +569,8 @@ function renderAccountsGrid(accounts) {
     `;
   }).join('');
 }
-
-// 주문 정보 정규화 헬퍼 (영문/한글 필드 호환)
-function parseOrderItem(o, defaultMemo = '') {
-  const p = o.price !== undefined ? Number(o.price) : (parseFloat(String(o['주문단가'] || '0').replace(/[^0-9.]/g, '')) || 0);
-  const q = o.qty !== undefined ? Number(o.qty) : (o.shares !== undefined ? Number(o.shares) : (parseInt(String(o['주문수량'] || '0').replace(/[^0-9]/g, '')) || 0));
-  const a = o.amount !== undefined ? Number(o.amount) : (parseFloat(String(o['예상금액'] || '0').replace(/[^0-9.]/g, '')) || (p * q));
-  const m = o.비고 || o.memo || o['체결조건'] || o['구분'] || o['호가단계'] || defaultMemo;
-  return { p, q, a, m };
 }
+
 
 // -------------------------------------------------------------------
 // 대시보드 당일 주문표 종합
@@ -705,7 +709,13 @@ function renderAllocationDonut(accounts) {
 async function openAccountDetailModal(accId, pushHistory = true) {
   try {
     const res = await authFetch(`/api/accounts/${accId}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: 계좌 데이터를 불러오지 못했습니다.`);
+    }
     const data = await res.json();
+    if (!data || !data.account) {
+      throw new Error('계좌 응답 데이터가 비어 있습니다.');
+    }
     state.activeAccountDetail = data;
 
     // 메인화면 내 계좌 상세 뷰로 전환 (모달 팝업 대신 인페이지)
@@ -724,8 +734,8 @@ async function openAccountDetailModal(accId, pushHistory = true) {
     }
 
     if (subTitleEl) {
-      const modeText = acc.mode || 'Normal';
-      const modeClass = acc.mode === 'Safe' ? 'badge-mode-safe' : (acc.mode === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
+      const modeText = acc.mode || (data.summary && data.summary.mode) || 'Normal';
+      const modeClass = modeText === 'Safe' ? 'badge-mode-safe' : (modeText === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
       subTitleEl.innerHTML = `
         <span class="badge badge-ticker">${acc.ticker}</span>
         <span class="badge ${modeClass}">${modeText}</span>
@@ -763,7 +773,8 @@ async function openAccountDetailModal(accId, pushHistory = true) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) {
     console.error('계좌 상세 로드 실패:', e);
-    showToast('계좌 상세 정보를 불러오지 못했습니다.', 'error');
+    const msg = (e && e.message) ? e.message : String(e);
+    showToast(`계좌 상세 정보를 불러오지 못했습니다: ${msg}`, 'error');
   }
 }
 
@@ -809,183 +820,193 @@ function switchDetailSubTab(subTabId) {
 }
 
 function renderDetailSubTabs(data) {
-  const acc = data.account;
-  const sum = data.summary;
+  if (!data) return;
+  const acc = data.account || {};
+  const sum = data.summary || {};
   const orders = data.orders || {};
   const unsold = data.unsold_lots || [];
   const records = data.trade_records || [];
   const adjustments = data.adjustments || [];
+  const parseFn = typeof parseOrderItem === 'function' ? parseOrderItem : (window.parseOrderItem || ((o, m = '') => ({ p: 0, q: 0, a: 0, m })));
 
   // 1. 주문표 서브탭
   const ordersPane = document.getElementById('subtab-orders');
-  const buyList = orders.buy_orders || [];
-  const sellList = orders.sell_orders || [];
+  if (ordersPane) {
+    const buyList = orders.buy_orders || [];
+    const sellList = orders.sell_orders || [];
 
-  let ordersContent = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
-      <div>
-        <span class="badge ${acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done'}">
-          ${acc.operational_state === 'WAITING_FOR_FILL' ? '장전 주문 대기' : '당일 마감 정산 완료'}
-        </span>
-        <span style="font-size:0.85rem;color:var(--text-secondary);margin-left:8px;">운용 기준일: <strong>${acc.current_date}</strong></span>
-      </div>
-      <div style="display:flex;gap:0.5rem;">
-        <button class="btn btn-secondary btn-sm" onclick="advanceAccountDay('${acc.id}')">⏩ 다음 거래일 진행 (Next Day)</button>
-        <button class="btn btn-primary btn-sm" onclick="openSettlementModal('${acc.id}')">📝 당일 종가 & 체결 정산</button>
-      </div>
-    </div>
-  `;
-
-  if (buyList.length > 0 || sellList.length > 0) {
-    ordersContent += `
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>구분</th>
-            <th>주문 단가</th>
-            <th>주문 수량</th>
-            <th>주문 금액</th>
-            <th>메모</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${sellList.map(o => {
-            const { p, q, a, m } = parseOrderItem(o);
-            const typeStr = o['주문유형'] || 'LOC 매도';
-            return `
-            <tr>
-              <td><span class="tag-sell">${typeStr}</span></td>
-              <td>${fmt.usd(p)}</td>
-              <td>${fmt.num(q)}주</td>
-              <td>${fmt.usd(a)}</td>
-              <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
-            </tr>
-          `;}).join('')}
-          ${buyList.map(o => {
-            const { p, q, a, m } = parseOrderItem(o);
-            const typeStr = o['주문유형'] || 'LOC 매수';
-            return `
-            <tr>
-              <td><span class="tag-buy">${typeStr}</span></td>
-              <td>${fmt.usd(p)}</td>
-              <td>${fmt.num(q)}주</td>
-              <td>${fmt.usd(a)}</td>
-              <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
-            </tr>
-          `;}).join('')}
-        </tbody>
-      </table>
-    `;
-  } else {
-    ordersContent += `
-      <div style="padding:2rem;text-align:center;color:var(--text-muted);background:rgba(15,23,42,0.5);border-radius:var(--radius-sm);">
-        현재 산출된 대기 주문이 없습니다. (Next Day 진행 후 장전 주문표가 자동 갱신됩니다)
+    let ordersContent = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
+        <div>
+          <span class="badge ${acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done'}">
+            ${acc.operational_state === 'WAITING_FOR_FILL' ? '장전 주문 대기' : '당일 마감 정산 완료'}
+          </span>
+          <span style="font-size:0.85rem;color:var(--text-secondary);margin-left:8px;">운용 기준일: <strong>${acc.current_date}</strong></span>
+        </div>
+        <div style="display:flex;gap:0.5rem;">
+          <button class="btn btn-secondary btn-sm" onclick="advanceAccountDay('${acc.id}')">⏩ 다음 거래일 진행 (Next Day)</button>
+          <button class="btn btn-primary btn-sm" onclick="openSettlementModal('${acc.id}')">📝 당일 종가 & 체결 정산</button>
+        </div>
       </div>
     `;
+
+    if (buyList.length > 0 || sellList.length > 0) {
+      ordersContent += `
+        <table class="custom-table">
+          <thead>
+            <tr>
+              <th>구분</th>
+              <th>주문 단가</th>
+              <th>주문 수량</th>
+              <th>주문 금액</th>
+              <th>메모</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sellList.map(o => {
+              const { p, q, a, m } = parseFn(o);
+              const typeStr = o['주문유형'] || 'LOC 매도';
+              return `
+              <tr>
+                <td><span class="tag-sell">${typeStr}</span></td>
+                <td>${fmt.usd(p)}</td>
+                <td>${fmt.num(q)}주</td>
+                <td>${fmt.usd(a)}</td>
+                <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
+              </tr>
+            `;}).join('')}
+            ${buyList.map(o => {
+              const { p, q, a, m } = parseFn(o);
+              const typeStr = o['주문유형'] || 'LOC 매수';
+              return `
+              <tr>
+                <td><span class="tag-buy">${typeStr}</span></td>
+                <td>${fmt.usd(p)}</td>
+                <td>${fmt.num(q)}주</td>
+                <td>${fmt.usd(a)}</td>
+                <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
+              </tr>
+            `;}).join('')}
+          </tbody>
+        </table>
+      `;
+    } else {
+      ordersContent += `
+        <div style="padding:2rem;text-align:center;color:var(--text-muted);background:rgba(15,23,42,0.5);border-radius:var(--radius-sm);">
+          현재 산출된 대기 주문이 없습니다. (Next Day 진행 후 장전 주문표가 자동 갱신됩니다)
+        </div>
+      `;
+    }
+    ordersPane.innerHTML = ordersContent;
   }
-  ordersPane.innerHTML = ordersContent;
 
   // 2. 미매도 슬롯 서브탭
   const unsoldPane = document.getElementById('subtab-unsold');
-  if (unsold.length > 0) {
-    unsoldPane.innerHTML = `
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>매수 일자</th>
-            <th>보유 수량</th>
-            <th>목표 매도가 (U)</th>
-            <th>보유 일수</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${unsold.map(u => `
+  if (unsoldPane) {
+    if (unsold.length > 0) {
+      unsoldPane.innerHTML = `
+        <table class="custom-table">
+          <thead>
             <tr>
-              <td>${u.date}</td>
-              <td><strong>${fmt.num(u.R)}주</strong></td>
-              <td style="color:var(--accent-cyan);font-weight:700;">${fmt.usd(u.U)}</td>
-              <td><span class="badge badge-mode-normal">${u.hold_days}일차</span></td>
+              <th>매수 일자</th>
+              <th>보유 수량</th>
+              <th>목표 매도가 (U)</th>
+              <th>보유 일수</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  } else {
-    unsoldPane.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">현재 미매도 보유 슬롯이 없습니다 (현금 100%).</div>';
+          </thead>
+          <tbody>
+            ${unsold.map(u => `
+              <tr>
+                <td>${u.date}</td>
+                <td><strong>${fmt.num(u.R)}주</strong></td>
+                <td style="color:var(--accent-cyan);font-weight:700;">${fmt.usd(u.U)}</td>
+                <td><span class="badge badge-mode-normal">${u.hold_days}일차</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } else {
+      unsoldPane.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">현재 미매도 보유 슬롯이 없습니다 (현금 100%).</div>';
+    }
   }
 
   // 3. 매매 일지 서브탭
   const recordsPane = document.getElementById('subtab-records');
-  if (records.length > 0) {
-    const reversed = [...records].reverse();
-    recordsPane.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
-        <button class="btn btn-danger btn-sm" onclick="undoLastTradeRecord('${acc.id}')">↩ 마지막 기록 취소 (Undo)</button>
-      </div>
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>날짜</th>
-            <th>종가</th>
-            <th>매수량</th>
-            <th>매도량</th>
-            <th>실현손익</th>
-            <th>예수금</th>
-            <th>보유수량</th>
-            <th>총자산</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${reversed.map(r => `
+  if (recordsPane) {
+    if (records.length > 0) {
+      const reversed = [...records].reverse();
+      recordsPane.innerHTML = `
+        <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+          <button class="btn btn-danger btn-sm" onclick="undoLastTradeRecord('${acc.id}')">↩ 마지막 기록 취소 (Undo)</button>
+        </div>
+        <table class="custom-table">
+          <thead>
             <tr>
-              <td>${r.Date ? String(r.Date).substring(0, 10) : ''}</td>
-              <td>${fmt.usd(r.Close)}</td>
-              <td>${r.R ? `${fmt.num(r.R)}주` : '-'}</td>
-              <td>${r.SellQty ? `${fmt.num(r.SellQty)}주` : '-'}</td>
-              <td style="${r.Profit > 0 ? 'color:var(--profit-green);font-weight:700;' : (r.Profit < 0 ? 'color:var(--loss-red);font-weight:700;' : '')}">
-                ${r.Profit !== null && r.Profit !== undefined ? fmt.usd(r.Profit) : '-'}
-              </td>
-              <td>${fmt.usd(r.Cash)}</td>
-              <td>${fmt.num(r.Hold)}주</td>
-              <td><strong>${fmt.usd(r.Asset)}</strong></td>
+              <th>날짜</th>
+              <th>종가</th>
+              <th>매수량</th>
+              <th>매도량</th>
+              <th>실현손익</th>
+              <th>예수금</th>
+              <th>보유수량</th>
+              <th>총자산</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  } else {
-    recordsPane.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">아직 기록된 일별 매매일지가 없습니다.</div>';
+          </thead>
+          <tbody>
+            ${reversed.map(r => `
+              <tr>
+                <td>${r.Date ? String(r.Date).substring(0, 10) : ''}</td>
+                <td>${fmt.usd(r.Close)}</td>
+                <td>${r.R ? `${fmt.num(r.R)}주` : '-'}</td>
+                <td>${r.SellQty ? `${fmt.num(r.SellQty)}주` : '-'}</td>
+                <td style="${r.Profit > 0 ? 'color:var(--profit-green);font-weight:700;' : (r.Profit < 0 ? 'color:var(--loss-red);font-weight:700;' : '')}">
+                  ${r.Profit !== null && r.Profit !== undefined ? fmt.usd(r.Profit) : '-'}
+                </td>
+                <td>${fmt.usd(r.Cash)}</td>
+                <td>${fmt.num(r.Hold)}주</td>
+                <td><strong>${fmt.usd(r.Asset)}</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } else {
+      recordsPane.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">아직 기록된 일별 매매일지가 없습니다.</div>';
+    }
   }
 
   // 4. 입출금 서브탭
   const adjPane = document.getElementById('subtab-adjustments');
-  adjPane.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
-      <button class="btn btn-primary btn-sm" onclick="openAdjustmentModal('${acc.id}')">+ 입출금 기록 추가</button>
-    </div>
-    ${adjustments.length > 0 ? `
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>일자</th>
-            <th>구분</th>
-            <th>금액</th>
-            <th>사유</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${adjustments.map(a => `
+  if (adjPane) {
+    adjPane.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+        <button class="btn btn-primary btn-sm" onclick="openAdjustmentModal('${acc.id}')">+ 입출금 기록 추가</button>
+      </div>
+      ${adjustments.length > 0 ? `
+        <table class="custom-table">
+          <thead>
             <tr>
-              <td>${a.date}</td>
-              <td><span class="badge ${a.type === 'DEPOSIT' ? 'badge-mode-normal' : 'badge-mode-riskoff'}">${a.type === 'DEPOSIT' ? '입금' : '출금 (세금 등)'}</span></td>
-              <td><strong>${fmt.usd(a.amount)}</strong></td>
-              <td>${a.reason || '-'}</td>
+              <th>일자</th>
+              <th>구분</th>
+              <th>금액</th>
+              <th>사유</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    ` : '<div style="padding:2rem;text-align:center;color:var(--text-muted);">입출금 이력이 없습니다.</div>'}
-  `;
+          </thead>
+          <tbody>
+            ${adjustments.map(a => `
+              <tr>
+                <td>${a.date}</td>
+                <td><span class="badge ${a.type === 'DEPOSIT' ? 'badge-mode-normal' : 'badge-mode-riskoff'}">${a.type === 'DEPOSIT' ? '입금' : '출금 (세금 등)'}</span></td>
+                <td><strong>${fmt.usd(a.amount)}</strong></td>
+                <td>${a.reason || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<div style="padding:2rem;text-align:center;color:var(--text-muted);">입출금 이력이 없습니다.</div>'}
+    `;
+  }
 }
 
 // -------------------------------------------------------------------
