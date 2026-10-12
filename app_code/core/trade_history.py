@@ -85,9 +85,10 @@ def build_trade_rows(records: List[Dict], strategy_name: str, kr_date_fn=format_
 
         # 매수 정보
         buy_qty = int(r.get('BuyQty', r.get('R', 0)) or 0)
-        target = _to_float(r.get('U')) if r.get('U') is not None else 0.0
-        if target == 0.0 and buy_qty > 0:
-            target = round_up(close * (1.0 + get_target_yield(strategy_name)), 2)
+        target = 0.0
+        if buy_qty > 0:
+            bp = _to_float(r.get('BuyPrice', close))
+            target = round_up(bp * (1.0 + get_target_yield(strategy_name, mode)), 2)
 
         # 매도 정보
         is_sold = bool(r.get('Sold', False)) and (r.get('W') is not None)

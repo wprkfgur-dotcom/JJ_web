@@ -1,6 +1,6 @@
 [project]
 name = "jongjong-trader"
-version = "2.3.1"
+version = "2.4.3"
 description = "종종이 & 무한매수 주식 매매 시스템"
 requires-python = ">=3.12"
 dependencies = [

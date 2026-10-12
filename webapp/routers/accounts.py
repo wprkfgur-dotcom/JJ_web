@@ -237,7 +237,12 @@ async def advance_account_day(acc_id: str, request: Request):
 @router.post("/{acc_id}/close-settlement")
 async def record_close_settlement(acc_id: str, req: SettlementRequest, request: Request):
     """미국 장마감 후 당일 종가 및 체결 수량 입력 정산 (소유자 검증)"""
-    get_owned_account(acc_id, request, "본인의 계좌만 정산할 수 있습니다.")
+    target = get_owned_account(acc_id, request, "본인의 계좌만 정산할 수 있습니다.")
+
+    mode = req.mode
+    if not mode:
+        details = am.compute_account_details(target)
+        mode = details.get("mode", "Normal")
 
     res = am.record_daily_close(
         acc_id=acc_id,
@@ -248,6 +253,7 @@ async def record_close_settlement(acc_id: str, req: SettlementRequest, request: 
         sell_price=req.sell_price,
         memo=req.memo or "",
         trade_date=req.trade_date,
+        mode=mode,
     )
     if not res:
         raise HTTPException(status_code=404, detail="Account not found or settlement failed")

@@ -16,6 +16,7 @@ from strategies.infinite_buying_v4 import InfiniteBuyingV4Strategy
 from strategies.vr_v5 import ValueRebalancingV5Strategy
 from core.order_netting import calculate_order_netting, generate_jongjong_orders
 from core.market_calendar import get_next_trading_day, parse_date
+from core.strategy_registry import get_target_yield
 
 if os.environ.get("FLET_APP_STORAGE_DATA"):
     # Flet 모바일 (Android/iOS) 전용 영구 저장소 디렉터리
@@ -442,14 +443,11 @@ class AccountManager:
 
         if shares_to_sell > 0:
             unsold_lots = [r for r in records if r.get('R', 0) > 0 and not r.get('Sold', False)]
-            t_yield = 0.0275 if '종종이' in acc.get('strategy', '') else 0.05
-
             def get_lot_u(lot):
-                raw_u = lot.get('U')
-                if raw_u is not None and not pd.isna(raw_u):
-                    return float(raw_u)
                 bp = float(lot.get('BuyPrice', lot.get('Close', close_p)))
-                return round_up(bp * (1.0 + t_yield), 2)
+                lot_mode = str(lot.get('Mode', 'Normal')).capitalize()
+                lot_yield = get_target_yield(acc.get('strategy'), lot_mode)
+                return round_up(bp * (1.0 + lot_yield), 2)
 
             # 슬롯 매도 우선순위 정렬 (만기 및 목표가 도달 익절 우선, 낮은 목표가 순)
             def get_sort_key(lot):
@@ -506,7 +504,7 @@ class AccountManager:
         gross_b = buy_p * buy_q
         b_fee = gross_b * fee_rate
         s_amt = round(gross_b + b_fee, 2)
-        target_yield = 0.0275 if '종종이' in acc.get('strategy', '') else 0.05
+        target_yield = get_target_yield(acc.get('strategy'), mode)
         u_target = round_up(buy_p * (1.0 + target_yield), 2) if buy_q > 0 else None
 
         # 3. 신규 잔고 산출
@@ -730,7 +728,8 @@ class AccountManager:
             for idx, row in df_res.iterrows():
                 r = int(row.get('R', 0))
                 sold = bool(row.get('Sold', False))
-                profit = float(row.get('Profit', 0.0))
+                raw_profit = row.get('Profit')
+                profit = float(raw_profit) if (raw_profit is not None and not pd.isna(raw_profit)) else 0.0
                 buy_qtys.append(r)
 
                 if r > 0 and not sold:
@@ -798,9 +797,11 @@ class AccountManager:
             for _, r_lot in unsold_df.iterrows():
                 h_days = len(df_res) - 1 - int(r_lot.get('t', 0))
                 d_str = r_lot['Date'].strftime('%m.%d') if hasattr(r_lot['Date'], 'strftime') else str(r_lot['Date'])
-                u_p = r_lot.get('U')
-                if u_p is None or pd.isna(u_p):
-                    u_p = round_up(float(r_lot['Close']) * (1.0 + strat.target_yields.get(r_lot.get('Mode', 'Normal'), 0.0275)), 2)
+                lot_mode = str(r_lot.get('Mode', 'Normal')).capitalize()
+                close_p = float(r_lot['Close'])
+                buy_p = float(r_lot.get('BuyPrice', close_p))
+                target_yield = strat.target_yields.get(lot_mode, 0.0275)
+                u_p = round_up(buy_p * (1.0 + target_yield), 2)
                 unsold_lots.append({
                     'date': d_str,
                     'R': int(r_lot['R']),

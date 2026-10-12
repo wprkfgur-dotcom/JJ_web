@@ -37,6 +37,13 @@ TARGET_YIELD_JONGJONG = 0.0275
 TARGET_YIELD_DEFAULT = 0.05
 
 
+TARGET_YIELDS_JONGJONG = {
+    'Normal': 0.0275,
+    'Safe': 0.0025,
+    'Riskoff': 0.0070
+}
+
+
 def classify_strategy(name: Optional[str]) -> str:
     """전략 이름 문자열로 전략 종류를 판별합니다.
 
@@ -70,9 +77,14 @@ def is_puddle(name: Optional[str]) -> bool:
     return classify_strategy(name) == PUDDLE
 
 
-def get_target_yield(name: Optional[str]) -> float:
-    """슬롯 목표가(U)가 없을 때 사용하는 기본 목표 수익률."""
-    return TARGET_YIELD_JONGJONG if is_jongjong(name) else TARGET_YIELD_DEFAULT
+def get_target_yield(name: Optional[str], mode: Optional[str] = None) -> float:
+    """슬롯 목표가(U)가 없을 때 사용하는 목표 수익률 (전략 및 종종이 모드 반영)."""
+    if is_jongjong(name):
+        if mode:
+            m_cap = str(mode).capitalize()
+            return TARGET_YIELDS_JONGJONG.get(m_cap, TARGET_YIELD_JONGJONG)
+        return TARGET_YIELD_JONGJONG
+    return TARGET_YIELD_DEFAULT
 
 
 def bnh_display_name(ticker: str) -> str:

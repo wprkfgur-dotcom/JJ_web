@@ -279,6 +279,9 @@ class TestJongJongTrader(unittest.TestCase):
         self.assertEqual(reg.classify_strategy(None), reg.BNH)
 
         self.assertEqual(reg.get_target_yield("종종이 기본전략"), 0.0275)
+        self.assertEqual(reg.get_target_yield("종종이 기본전략", mode="Normal"), 0.0275)
+        self.assertEqual(reg.get_target_yield("종종이 기본전략", mode="Safe"), 0.0025)
+        self.assertEqual(reg.get_target_yield("종종이 기본전략", mode="Riskoff"), 0.0070)
         self.assertEqual(reg.get_target_yield("무한매수법 v4.0"), 0.05)
 
         self.assertIsInstance(reg.create_backtest_strategy(reg.DISPLAY_NAMES[reg.JONGJONG], "SOXL", 1000.0), JongJongStrategy)
@@ -305,8 +308,8 @@ class TestJongJongTrader(unittest.TestCase):
         self.assertEqual([r['idx'] for r in rows], [2, 1, 0])  # 최신순
 
         newest, middle, oldest = rows
-        # 목표가 폴백: 100 * 1.0275 = 102.75
-        self.assertAlmostEqual(newest['target_price'], 102.75, places=2)
+        # 목표가 폴백: Safe 모드이므로 100 * (1 + 0.0025) = 100.25
+        self.assertAlmostEqual(newest['target_price'], 100.25, places=2)
         self.assertTrue(newest['is_holding'])
         self.assertEqual(newest['sell_date_str'], "보유중(0d)")
         self.assertEqual(newest['profit_str'], "-")
@@ -495,6 +498,28 @@ class TestJongJongTrader(unittest.TestCase):
         # 매도 주문 중 146.44가 퉁치기 없이 그대로 목표가 매도로 유지되는지 확인
         sell_prices = [float(s['price']) for s in dtl['sell_orders']]
         self.assertIn(146.44, sell_prices)
+
+        # 10월 9일 Safe 모드에서 380주 매수 체결 정산 시 목표가 U가 140.11 (+0.25%)로 정확히 계산되는지 검증
+        updated_acc = am.record_daily_close(
+            acc_id=acc['id'],
+            close_price=139.76,
+            buy_qty=380,
+            buy_price=139.76,
+            mode='Safe',
+            trade_date='2026-10-09'
+        )
+        safe_rec = updated_acc['trade_records'][-1]
+        self.assertEqual(safe_rec['Mode'], 'Safe')
+        self.assertEqual(safe_rec['BuyQty'], 380)
+        self.assertEqual(safe_rec['U'], 140.11)  # 139.76 * (1 + 0.0025) 올림 = 140.11
+
+        # 10월 12일 익일 주문표에서 Safe 모드 매수분(380주)의 매도 주문단가가 $140.11인지 확인
+        acc_1012 = am.advance_next_day(acc['id'])
+        dtl_1012 = am.compute_account_details(acc_1012)
+        sell_orders_1012 = dtl_1012['sell_orders']
+        safe_sell = next((s for s in sell_orders_1012 if float(s['price']) == 140.11), None)
+        self.assertIsNotNone(safe_sell, "Safe 모드 매수분의 매도 주문($140.11)이 주문표에 포함되어야 함")
+        self.assertEqual(int(str(safe_sell['qty']).replace('주', '').replace(',', '')), 380)
 
 
 if __name__ == "__main__":

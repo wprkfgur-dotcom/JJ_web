@@ -31,6 +31,7 @@ class SettlementRequest(BaseModel):
     sell_price: Optional[float] = None
     memo: Optional[str] = ""
     trade_date: Optional[str] = None
+    mode: Optional[str] = None
 
 
 class AdjustmentRequest(BaseModel):

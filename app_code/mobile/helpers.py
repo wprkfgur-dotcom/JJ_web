@@ -8,6 +8,7 @@ import flet as ft
 
 from mobile.theme import LOSS_RED, PROFIT_GREEN
 from core.strategy_registry import get_target_yield
+from strategies.jongjong import round_up
 
 
 def copy_text_to_clipboard(page: ft.Page, text: str):
@@ -170,14 +171,11 @@ def compute_suggested_trades(
             if rq <= 0 or bool(lot.get('Sold', False)):
                 continue
 
-            # 목표가 U 확인
-            u_val = lot.get('U')
-            if u_val is None or pd.isna(u_val):
-                bp = float(lot.get('BuyPrice', lot.get('Close', close_p)))
-                t_yield = get_target_yield(strategy_name)
-                u_val = bp * (1.0 + t_yield)
-            else:
-                u_val = float(u_val)
+            # 목표가 U 확인: 원천 데이터(BuyPrice/Close, Mode) 기반 동적 계산
+            bp = float(lot.get('BuyPrice', lot.get('Close', close_p)))
+            lot_mode = str(lot.get('Mode', 'Normal')).capitalize()
+            t_yield = get_target_yield(strategy_name, lot_mode)
+            u_val = round_up(bp * (1.0 + t_yield), 2)
 
             # 보유 일수 확인
             h_days = int(lot.get('hold_days', 0))
@@ -192,8 +190,9 @@ def compute_suggested_trades(
         valid_lots = [l for l in unsold_lots if int(l.get('R', 0)) > 0 and not bool(l.get('Sold', False))]
         if valid_lots:
             def _get_u(x):
-                val = x.get('U')
-                return float(val) if (val is not None and not pd.isna(val)) else 999999.0
+                bp_x = float(x.get('BuyPrice', x.get('Close', close_p)))
+                m_x = str(x.get('Mode', 'Normal')).capitalize()
+                return round_up(bp_x * (1.0 + get_target_yield(strategy_name, m_x)), 2)
             min_u_lot = min(valid_lots, key=_get_u)
     else:
         for s in sell_orders:
