@@ -45,7 +45,8 @@ def init_db(db_path: str):
             last_applied_adj REAL,
             manual_mode TEXT,
             auto_trade_json TEXT,
-            order_table_json TEXT
+            order_table_json TEXT,
+            strategy_params_json TEXT
         );
 
         CREATE TABLE IF NOT EXISTS adjustments (
@@ -90,6 +91,10 @@ def init_db(db_path: str):
         );
         CREATE INDEX IF NOT EXISTS idx_tr_acc_date ON trade_records(account_id, trade_date);
         """)
+        try:
+            conn.execute("ALTER TABLE accounts ADD COLUMN strategy_params_json TEXT")
+        except Exception:
+            pass
 
 def migrate_from_json_if_needed(json_path: str, db_path: str) -> bool:
     """
@@ -199,6 +204,14 @@ def load_all_accounts(db_path: str) -> List[Dict[str, Any]]:
                 }
                 trade_records.append(rec)
 
+            # strategy_params 복원
+            strategy_params = {}
+            if "strategy_params_json" in a.keys() and a["strategy_params_json"]:
+                try:
+                    strategy_params = json.loads(a["strategy_params_json"])
+                except Exception:
+                    pass
+
             acc_dict = {
                 "id": acc_id,
                 "owner": a["owner"],
@@ -220,6 +233,7 @@ def load_all_accounts(db_path: str) -> List[Dict[str, Any]]:
                 "manual_mode": a["manual_mode"],
                 "auto_trade": auto_trade,
                 "order_table": order_table,
+                "strategy_params": strategy_params,
                 "adjustments": adjustments,
                 "trade_records": trade_records
             }
@@ -242,14 +256,15 @@ def save_all_accounts(accounts: List[Dict[str, Any]], db_path: str):
 
             auto_trade_json = json.dumps(acc.get("auto_trade", {}), ensure_ascii=False) if acc.get("auto_trade") else None
             order_table_json = json.dumps(acc.get("order_table", {}), ensure_ascii=False) if acc.get("order_table") else None
+            strategy_params_json = json.dumps(acc.get("strategy_params", {}), ensure_ascii=False) if acc.get("strategy_params") else None
 
             # 1. Account Upsert
             cur.execute("""
             INSERT INTO accounts (
                 id, owner, name, strategy, ticker, start_date, initial_seed, reserve_ratio,
                 memo, created_at, current_date, operational_state, current_cash, current_holdings,
-                total_asset, current_price, last_applied_adj, manual_mode, auto_trade_json, order_table_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                total_asset, current_price, last_applied_adj, manual_mode, auto_trade_json, order_table_json, strategy_params_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 owner = excluded.owner,
                 name = excluded.name,
@@ -269,7 +284,8 @@ def save_all_accounts(accounts: List[Dict[str, Any]], db_path: str):
                 last_applied_adj = excluded.last_applied_adj,
                 manual_mode = excluded.manual_mode,
                 auto_trade_json = excluded.auto_trade_json,
-                order_table_json = excluded.order_table_json;
+                order_table_json = excluded.order_table_json,
+                strategy_params_json = excluded.strategy_params_json;
             """, (
                 acc_id,
                 acc.get("owner", "huxley"),
@@ -290,7 +306,8 @@ def save_all_accounts(accounts: List[Dict[str, Any]], db_path: str):
                 float(acc.get("last_applied_adj", 0.0)),
                 acc.get("manual_mode"),
                 auto_trade_json,
-                order_table_json
+                order_table_json,
+                strategy_params_json
             ))
 
             # 2. Adjustments 교체

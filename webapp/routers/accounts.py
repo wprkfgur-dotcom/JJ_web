@@ -13,6 +13,7 @@ from ..schemas import (
     UpdateAccountRequest,
     AccountBrokerConfigRequest,
     EditTradeRecordRequest,
+    StrategyParamsRequest,
 )
 from ..utils import current_username, get_owned_account, sanitize_for_json
 
@@ -130,6 +131,42 @@ async def list_accounts(request: Request):
 
     total_profit = total_asset - total_seed
     overall_pct = round(total_profit / total_seed * 100, 2) if total_seed > 0 else 0.0
+
+    # 일자별 총 자산 추이 (Daily Total Asset Trend) 집계 (X축: 거래일자, Y축: 총자산)
+    all_dates = set()
+    acc_records_map = {}
+    for acc in user_accounts:
+        recs = acc.get("trade_records", [])
+        rec_dict = {}
+        for r in recs:
+            d = str(r.get("Date", ""))[:10]
+            if d:
+                all_dates.add(d)
+                try:
+                    rec_dict[d] = float(r.get("Asset", 0.0))
+                except (ValueError, TypeError):
+                    rec_dict[d] = 0.0
+        acc_records_map[acc["id"]] = {
+            "start_date": str(acc.get("start_date", ""))[:10],
+            "initial_seed": float(acc.get("initial_seed", 0.0)),
+            "records": rec_dict
+        }
+
+    daily_trend = []
+    if all_dates:
+        sorted_dates = sorted(list(all_dates))
+        latest_acc_asset = {acc["id"]: 0.0 for acc in user_accounts}
+        for d in sorted_dates:
+            day_total = 0.0
+            for acc in user_accounts:
+                acc_info = acc_records_map[acc["id"]]
+                if d in acc_info["records"]:
+                    latest_acc_asset[acc["id"]] = acc_info["records"][d]
+                elif latest_acc_asset[acc["id"]] == 0.0 and d >= acc_info["start_date"]:
+                    latest_acc_asset[acc["id"]] = acc_info["initial_seed"]
+                day_total += latest_acc_asset[acc["id"]]
+            daily_trend.append({"date": d, "asset": round(day_total, 2)})
+
     return {
         "portfolio": {
             "total_asset": round(total_asset, 2),
@@ -139,6 +176,7 @@ async def list_accounts(request: Request):
             "return_pct": overall_pct,
             "account_count": len(processed),
             "owner": owner,
+            "daily_trend": daily_trend,
         },
         "accounts": processed,
     }
@@ -156,6 +194,7 @@ async def get_account_detail(acc_id: str, request: Request):
     trade_records = target.get("trade_records", [])
     acc_copy = dict(target)
     acc_copy["mode"] = details_clean.get("mode", "Normal")
+    acc_copy["strategy_params"] = am.get_account_strategy_params(acc_id)
     if "auto_trade" in acc_copy and isinstance(acc_copy["auto_trade"], dict):
         sanitized_at = dict(acc_copy["auto_trade"])
         sanitized_at.pop("app_key_enc", None)
@@ -437,4 +476,26 @@ async def check_and_save_broker(acc_id: str, req: AccountBrokerConfigRequest, re
         }
 
     raise HTTPException(status_code=400, detail="지원되지 않는 증권사입니다.")
+
+
+@router.get("/{acc_id}/strategy-params")
+async def get_account_strategy_params(acc_id: str, request: Request):
+    """계좌별 전략 파라미터 조회 (소유자 검증)"""
+    get_owned_account(acc_id, request, "본인의 계좌만 조회할 수 있습니다.")
+    params = am.get_account_strategy_params(acc_id)
+    if params is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"success": True, "strategy_params": params}
+
+
+@router.post("/{acc_id}/strategy-params")
+async def update_account_strategy_params(acc_id: str, req: StrategyParamsRequest, request: Request):
+    """계좌별 전략 파라미터(보유일수, 위기준비율, 수수료율, 모드별 익절률/분할수) 설정 (소유자 검증)"""
+    get_owned_account(acc_id, request, "본인의 계좌만 수정할 수 있습니다.")
+    try:
+        updated = am.save_account_strategy_params(acc_id, req.dict())
+        return {"success": True, "strategy_params": updated}
+    except Exception as ex:
+        raise HTTPException(status_code=400, detail=str(ex))
+
 

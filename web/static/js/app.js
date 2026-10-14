@@ -435,7 +435,7 @@ async function loadAccounts(isSilent = false) {
 
     renderDashboardKPIs(data.portfolio);
     renderAccountsGrid(data.accounts);
-    renderDashboardOrders(data.accounts);
+    renderAssetTrendChart(data.portfolio);
     renderAllocationDonut(data.accounts);
 
     // 헤더 사용자 계좌 상태 업데이트
@@ -553,90 +553,110 @@ function renderAccountsGrid(accounts) {
 
 
 // -------------------------------------------------------------------
-// 대시보드 당일 주문표 종합
+// 대시보드 일자별 총 자산 현황 꺾은선 차트 (X축: 거래일자, Y축: 총자산)
 // -------------------------------------------------------------------
-async function renderDashboardOrders(accounts) {
-  const container = document.getElementById('dashboard-orders-container');
-  if (!container) return;
+function renderAssetTrendChart(portfolio) {
+  const canvas = document.getElementById('assetTrendLineChart');
+  if (!canvas) return;
 
-  if (!accounts || accounts.length === 0) {
-    container.innerHTML = '<p style="color:var(--text-muted);padding:1rem;">등록된 계좌가 없습니다.</p>';
+  const trendData = (portfolio && portfolio.daily_trend) ? portfolio.daily_trend : [];
+  const latestAssetEl = document.getElementById('trend-latest-asset');
+  if (latestAssetEl && portfolio) {
+    latestAssetEl.textContent = `현재 총 자산: ${fmt.usd(portfolio.total_asset)}`;
+  }
+
+  if (trendData.length === 0) {
+    if (state.charts.assetTrend) {
+      state.charts.assetTrend.destroy();
+      state.charts.assetTrend = null;
+    }
     return;
   }
 
-  let rowsHtml = '';
-  for (const acc of accounts) {
-    try {
-      const res = await authFetch(`/api/accounts/${acc.id}`);
-      const data = await res.json();
-      const orders = data.orders || {};
-      const buyOrders = orders.buy_orders || [];
-      const sellOrders = orders.sell_orders || [];
+  const labels = trendData.map(item => item.date);
+  const dataVals = trendData.map(item => item.asset);
 
-      if (buyOrders.length === 0 && sellOrders.length === 0) {
-        continue;
+  if (state.charts.assetTrend) {
+    state.charts.assetTrend.destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+  gradient.addColorStop(0, 'rgba(16, 185, 129, 0.3)');
+  gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+
+  state.charts.assetTrend = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [{
+        label: '일자별 총 자산 ($)',
+        data: dataVals,
+        borderColor: '#10b981',
+        backgroundColor: gradient,
+        borderWidth: 2.2,
+        pointRadius: labels.length > 50 ? 0 : 2.5,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#10b981',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1.5,
+        fill: true,
+        tension: 0.2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0f172a',
+          titleColor: '#94a3b8',
+          bodyColor: '#34d399',
+          bodyFont: { weight: 'bold', size: 13 },
+          borderColor: 'rgba(52, 211, 153, 0.3)',
+          borderWidth: 1,
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            title: function(items) {
+              return `📅 거래일: ${items[0].label}`;
+            },
+            label: function(ctx) {
+              return `💰 총 자산: $${Number(ctx.raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: {
+            color: '#94a3b8',
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 7
+          }
+        },
+        y: {
+          position: 'right',
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: {
+            color: '#94a3b8',
+            callback: function(val) {
+              return '$' + (val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val);
+            }
+          }
+        }
       }
-
-      // 매도 주문행
-      sellOrders.forEach(o => {
-        const { p, q, a, m } = parseOrderItem(o, '목표가 도달 시 청산');
-        const typeStr = o['주문유형'] || 'LOC 매도';
-        rowsHtml += `
-          <tr>
-            <td><strong>${acc.name}</strong> (${acc.ticker})</td>
-            <td><span class="tag-sell">${typeStr}</span></td>
-            <td>${fmt.usd(p)}</td>
-            <td>${fmt.num(q)}주</td>
-            <td>${fmt.usd(a)}</td>
-            <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
-          </tr>
-        `;
-      });
-
-      // 매수 주문행
-      buyOrders.forEach(o => {
-        const { p, q, a, m } = parseOrderItem(o, '분할 LOC 매수');
-        const typeStr = o['주문유형'] || 'LOC 매수';
-        rowsHtml += `
-          <tr>
-            <td><strong>${acc.name}</strong> (${acc.ticker})</td>
-            <td><span class="tag-buy">${typeStr}</span></td>
-            <td>${fmt.usd(p)}</td>
-            <td>${fmt.num(q)}주</td>
-            <td>${fmt.usd(a)}</td>
-            <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
-          </tr>
-        `;
-      });
-    } catch (e) {
-      console.warn(e);
     }
-  }
-
-  if (rowsHtml) {
-    container.innerHTML = `
-      <table class="custom-table">
-        <thead>
-          <tr>
-            <th>계좌 / 종목</th>
-            <th>주문 구분</th>
-            <th>주문 단가</th>
-            <th>수량</th>
-            <th>주문 예상액</th>
-            <th>주문 메모</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    `;
-  } else {
-    container.innerHTML = `
-      <div style="padding: 1.5rem; text-align: center; color: var(--text-muted);">
-        오늘 대기 중인 LOC 주문이 없거나 마감 정산이 완료되었습니다.
-      </div>
-    `;
-  }
+  });
 }
+
 
 // -------------------------------------------------------------------
 // 자산 배분 도넛 차트
@@ -1105,7 +1125,233 @@ function renderDetailSubTabs(data) {
       ` : '<div style="padding:2rem;text-align:center;color:var(--text-muted);">입출금 이력이 없습니다.</div>'}
     `;
   }
+
+  // 5. 전략 운용 변수 설정 서브탭 (모드별 익절률 & 분할수, 보유일수, 위기준비, 수수료율)
+  const stratPane = document.getElementById('subtab-strategy-settings');
+  if (stratPane) {
+    const params = acc.strategy_params || {
+      max_hold_days: 10,
+      reserve_ratio: acc.reserve_ratio || 0.05,
+      fee_rate: 0.0,
+      normal_target_yield: 0.0275,
+      normal_splits: 8.0,
+      safe_target_yield: 0.0025,
+      safe_splits: 7.0,
+      riskoff_target_yield: 0.0070,
+      riskoff_splits: 5.0
+    };
+
+    const maxHoldDays = params.max_hold_days || 10;
+    const reserveRatioPct = ((params.reserve_ratio !== undefined ? params.reserve_ratio : 0.05) * 100).toFixed(2);
+    const feeRatePct = ((params.fee_rate !== undefined ? params.fee_rate : 0.0) * 100).toFixed(3);
+    const normalYieldPct = ((params.normal_target_yield !== undefined ? params.normal_target_yield : 0.0275) * 100).toFixed(2);
+    const normalSplits = params.normal_splits !== undefined ? params.normal_splits : 8;
+    const safeYieldPct = ((params.safe_target_yield !== undefined ? params.safe_target_yield : 0.0025) * 100).toFixed(2);
+    const safeSplits = params.safe_splits !== undefined ? params.safe_splits : 7;
+    const riskoffYieldPct = ((params.riskoff_target_yield !== undefined ? params.riskoff_target_yield : 0.0070) * 100).toFixed(2);
+    const riskoffSplits = params.riskoff_splits !== undefined ? params.riskoff_splits : 5;
+
+    stratPane.innerHTML = `
+      <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.5rem; max-width: 900px; margin: 0 auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;">
+          <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+              <span>⚙️</span> 계좌별 맞춤 전략 운용 변수 설정
+            </h3>
+            <p style="margin: 4px 0 0 0; font-size: 0.82rem; color: var(--text-muted);">
+              각 시장 모드(Normal / Safe / Riskoff)별 목표 익절률 및 분할수, 보유일수, 위기준비율을 자유롭게 맞춤 설정합니다.
+            </p>
+          </div>
+          <span class="badge badge-ticker">${acc.name}</span>
+        </div>
+
+        <!-- 3분할 파라미터 그리드 (제공된 시트 서식 완벽 대응) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
+          
+          <!-- 카드 1: 기본 운용 기간 & 위기준비금 -->
+          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
+            <div style="font-weight: 700; color: #f59e0b; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+              <span>⏳</span> 기간 & 자산 배분
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>보유일수 (만기)</span>
+                <span style="color: var(--text-muted); font-size: 0.75rem;">기준 10일</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="number" id="sp-max-hold-days" class="form-control" value="${maxHoldDays}" min="1" max="60" step="1" style="font-weight: 700; text-align: right;">
+                <span style="color: var(--text-muted); font-size: 0.85rem; min-width: 28px;">일</span>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0.5rem;">
+              <label style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>위기준비금 비율</span>
+                <span style="color: var(--text-muted); font-size: 0.75rem;">기준 5.00%</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="number" id="sp-reserve-ratio" class="form-control" value="${reserveRatioPct}" min="0" max="50" step="0.25" style="font-weight: 700; text-align: right;">
+                <span style="color: var(--text-muted); font-size: 0.85rem; min-width: 28px;">%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 카드 2: 모드별 매도 목표수익률 & 분할수 -->
+          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
+            <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+              <span>🎯</span> 시장 모드별 매도 & 분할수
+            </div>
+
+            <!-- Normal -->
+            <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 4px; padding: 0.6rem; margin-bottom: 0.75rem;">
+              <div style="font-size: 0.82rem; font-weight: 700; color: #10b981; margin-bottom: 4px;">Normal (상승장/평상시)</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label style="font-size: 0.73rem; color: var(--text-muted);">매도 목표수익률</label>
+                  <div style="display: flex; align-items: center; gap: 0.2rem;">
+                    <input type="number" id="sp-normal-yield" class="form-control" value="${normalYieldPct}" step="0.05" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size: 0.73rem; color: var(--text-muted);">분할 조각수</label>
+                  <div style="display: flex; align-items: center; gap: 0.2rem;">
+                    <input type="number" id="sp-normal-splits" class="form-control" value="${normalSplits}" step="1" min="1" max="50" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">조각</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Safe -->
+            <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 4px; padding: 0.6rem; margin-bottom: 0.75rem;">
+              <div style="font-size: 0.82rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">Safe (주의/보수 모드)</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label style="font-size: 0.73rem; color: var(--text-muted);">매도 목표수익률</label>
+                  <div style="display: flex; align-items: center; gap: 0.2rem;">
+                    <input type="number" id="sp-safe-yield" class="form-control" value="${safeYieldPct}" step="0.05" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size: 0.73rem; color: var(--text-muted);">분할 조각수</label>
+                  <div style="display: flex; align-items: center; gap: 0.2rem;">
+                    <input type="number" id="sp-safe-splits" class="form-control" value="${safeSplits}" step="1" min="1" max="50" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">조각</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Riskoff -->
+            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 4px; padding: 0.6rem;">
+              <div style="font-size: 0.82rem; font-weight: 700; color: #ef4444; margin-bottom: 4px;">Riskoff (위기/폭락장 탈출 모드)</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div>
+                  <label style="font-size: 0.73rem; color: var(--text-muted);">매도 목표수익률</label>
+                  <div style="display: flex; align-items: center; gap: 0.2rem;">
+                    <input type="number" id="sp-riskoff-yield" class="form-control" value="${riskoffYieldPct}" step="0.05" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size: 0.73rem; color: var(--text-muted);">분할 조각수</label>
+                  <div style="display: flex; align-items: center; gap: 0.2rem;">
+                    <input type="number" id="sp-riskoff-splits" class="form-control" value="${riskoffSplits}" step="1" min="1" max="50" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">조각</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 카드 3: 수수료율 설정 -->
+          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
+            <div>
+              <div style="font-weight: 700; color: #a78bfa; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+                <span>💳</span> 거래 수수료
+              </div>
+
+              <div class="form-group" style="margin-bottom: 1rem;">
+                <label style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                  <span>수수료율</span>
+                  <span style="color: var(--text-muted); font-size: 0.75rem;">기준 0.000%</span>
+                </label>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <input type="number" id="sp-fee-rate" class="form-control" value="${feeRatePct}" min="0" max="5" step="0.005" style="font-weight: 700; text-align: right;">
+                  <span style="color: var(--text-muted); font-size: 0.85rem; min-width: 28px;">%</span>
+                </div>
+              </div>
+
+              <div style="padding: 0.75rem; background: rgba(0,0,0,0.25); border-radius: 4px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.45;">
+                💡 <strong>안내:</strong><br>
+                - 최초원금, SEC Fee, 수수료합은 시스템 자동 산출되므로 별도 설정할 필요가 없습니다.<br>
+                - 설정 저장 시 즉시 해당 계좌의 당일 LOC 주문표 및 매수/매도 수량이 자동 재계산됩니다.
+              </div>
+            </div>
+
+            <div style="margin-top: 1.25rem;">
+              <button type="button" class="btn btn-primary" onclick="saveAccountStrategyParams('${acc.id}')" style="width: 100%; padding: 0.75rem; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                <span>💾</span> 전략 운용 설정 저장
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    `;
+  }
 }
+
+async function saveAccountStrategyParams(accId) {
+  const maxHold = parseInt(document.getElementById('sp-max-hold-days').value, 10);
+  const reserveRatioPct = parseFloat(document.getElementById('sp-reserve-ratio').value);
+  const feeRatePct = parseFloat(document.getElementById('sp-fee-rate').value);
+  const normalYieldPct = parseFloat(document.getElementById('sp-normal-yield').value);
+  const normalSplits = parseFloat(document.getElementById('sp-normal-splits').value);
+  const safeYieldPct = parseFloat(document.getElementById('sp-safe-yield').value);
+  const safeSplits = parseFloat(document.getElementById('sp-safe-splits').value);
+  const riskoffYieldPct = parseFloat(document.getElementById('sp-riskoff-yield').value);
+  const riskoffSplits = parseFloat(document.getElementById('sp-riskoff-splits').value);
+
+  if (isNaN(maxHold) || isNaN(normalSplits) || isNaN(safeSplits) || isNaN(riskoffSplits)) {
+    showToast('모든 숫자 항목을 올바르게 입력해주세요.', 'error');
+    return;
+  }
+
+  const payload = {
+    max_hold_days: maxHold,
+    reserve_ratio: (reserveRatioPct || 0) / 100.0,
+    fee_rate: (feeRatePct || 0) / 100.0,
+    normal_target_yield: (normalYieldPct || 0) / 100.0,
+    normal_splits: normalSplits,
+    safe_target_yield: (safeYieldPct || 0) / 100.0,
+    safe_splits: safeSplits,
+    riskoff_target_yield: (riskoffYieldPct || 0) / 100.0,
+    riskoff_splits: riskoffSplits
+  };
+
+  try {
+    const res = await authFetch(`/api/accounts/${accId}/strategy-params`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('전략 운용 변수가 저장되었으며 당일 주문표 및 LOC 목표가가 갱신되었습니다.', 'success');
+      await openAccountDetailModal(accId, false);
+      loadAccounts(true);
+    } else {
+      showToast(data.detail || '설정 저장에 실패했습니다.', 'error');
+    }
+  } catch (e) {
+    showToast('설정 저장 중 오류가 발생했습니다.', 'error');
+  }
+}
+window.saveAccountStrategyParams = saveAccountStrategyParams;
 
 // -------------------------------------------------------------------
 // 계좌 관련 제어 액션들
@@ -1215,6 +1461,7 @@ function openEditTradeModal(accId, dateStr, close, buyQty, sellQty, mode, memo) 
   document.getElementById('edit-trade-memo').value = memo || '';
 
   modal.classList.add('active');
+  modal.style.display = 'flex';
 }
 
 async function submitEditTradeRecord() {
@@ -1339,7 +1586,10 @@ async function submitNewAccount() {
 
 function closeModal(id) {
   const modal = document.getElementById(id);
-  if (modal) modal.classList.remove('active');
+  if (modal) {
+    modal.classList.remove('active');
+    modal.style.display = 'none';
+  }
 }
 
 // -------------------------------------------------------------------

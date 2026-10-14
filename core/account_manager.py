@@ -304,6 +304,54 @@ class AccountManager:
         self.save_accounts(accounts)
         return self.get_account_broker_config(acc_id)
 
+    def get_account_strategy_params(self, acc_id: str) -> dict:
+        """
+        계좌별 전략 설정 파라미터 조회 (기본값 제공)
+        """
+        accounts = self.load_accounts()
+        target = next((a for a in accounts if a['id'] == acc_id), None)
+        if not target:
+            return None
+        params = target.get('strategy_params') or {}
+        return {
+            'max_hold_days': int(params.get('max_hold_days', 10)),
+            'reserve_ratio': float(params.get('reserve_ratio', target.get('reserve_ratio', 0.05))),
+            'fee_rate': float(params.get('fee_rate', 0.0)),
+            'normal_target_yield': float(params.get('normal_target_yield', 0.0275)),
+            'normal_splits': float(params.get('normal_splits', 8.0)),
+            'safe_target_yield': float(params.get('safe_target_yield', 0.0025)),
+            'safe_splits': float(params.get('safe_splits', 7.0)),
+            'riskoff_target_yield': float(params.get('riskoff_target_yield', 0.0070)),
+            'riskoff_splits': float(params.get('riskoff_splits', 5.0))
+        }
+
+    def save_account_strategy_params(self, acc_id: str, params: dict) -> dict:
+        """
+        계좌별 전략 파라미터(보유일수, 위기준비율, 수수료율, 모드별 목표수익률 및 분할수)를 저장합니다.
+        """
+        accounts = self.load_accounts()
+        target = next((a for a in accounts if a['id'] == acc_id), None)
+        if not target:
+            raise ValueError(f"계좌 ID {acc_id}를 찾을 수 없습니다.")
+
+        clean_params = {
+            'max_hold_days': int(params.get('max_hold_days', 10)),
+            'reserve_ratio': float(params.get('reserve_ratio', 0.05)),
+            'fee_rate': float(params.get('fee_rate', 0.0)),
+            'normal_target_yield': float(params.get('normal_target_yield', 0.0275)),
+            'normal_splits': float(params.get('normal_splits', 8.0)),
+            'safe_target_yield': float(params.get('safe_target_yield', 0.0025)),
+            'safe_splits': float(params.get('safe_splits', 7.0)),
+            'riskoff_target_yield': float(params.get('riskoff_target_yield', 0.0070)),
+            'riskoff_splits': float(params.get('riskoff_splits', 5.0))
+        }
+
+        target['strategy_params'] = clean_params
+        target['reserve_ratio'] = clean_params['reserve_ratio']
+        self.sync_account_balances(target)
+        self.save_accounts(accounts)
+        return clean_params
+
     def export_trade_records_csv(self, acc_id: str, file_path: str) -> bool:
         """
         계좌의 매매 일지(trade_records) 및 상세 지표를 CSV 파일로 저장합니다.
@@ -946,7 +994,28 @@ class AccountManager:
         unsold_lots = []
 
         if '종종이' in strategy_name:
-            strat = JongJongStrategy(initial_capital=initial_seed)
+            params = acc.get('strategy_params') or {}
+            res_ratio = float(params.get('reserve_ratio', acc.get('reserve_ratio', 0.05)))
+            max_hold = int(params.get('max_hold_days', 10))
+            fee_r = float(params.get('fee_rate', 0.0))
+            target_yields = {
+                'Normal': float(params.get('normal_target_yield', 0.0275)),
+                'Safe': float(params.get('safe_target_yield', 0.0025)),
+                'Riskoff': float(params.get('riskoff_target_yield', 0.0070))
+            }
+            div_rounds = {
+                'Normal': float(params.get('normal_splits', 8.0)),
+                'Safe': float(params.get('safe_splits', 7.0)),
+                'Riskoff': float(params.get('riskoff_splits', 5.0))
+            }
+            strat = JongJongStrategy(
+                initial_capital=initial_seed,
+                reserve_ratio=res_ratio,
+                max_hold_days=max_hold,
+                fee_rate=fee_r,
+                target_yields=target_yields,
+                div_rounds=div_rounds
+            )
             unsold_mask = (df_res['R'] > 0) & (~df_res['Sold'])
             unsold_df = df_res[unsold_mask]
             unsold_lots = []

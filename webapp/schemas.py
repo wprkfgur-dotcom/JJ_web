@@ -114,4 +114,17 @@ class EditTradeRecordRequest(BaseModel):
     memo: Optional[str] = None
 
 
+class StrategyParamsRequest(BaseModel):
+    max_hold_days: int = Field(default=10, example=10)
+    reserve_ratio: float = Field(default=0.05, example=0.05)
+    fee_rate: float = Field(default=0.0, example=0.0)
+    normal_target_yield: float = Field(default=0.0275, example=0.0275)
+    normal_splits: float = Field(default=8.0, example=8.0)
+    safe_target_yield: float = Field(default=0.0025, example=0.0025)
+    safe_splits: float = Field(default=7.0, example=7.0)
+    riskoff_target_yield: float = Field(default=0.0070, example=0.0070)
+    riskoff_splits: float = Field(default=5.0, example=5.0)
+
+
+
 
