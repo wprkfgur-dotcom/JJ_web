@@ -1,4 +1,4 @@
-"""
+﻿"""
 계좌 관리 및 자산 입출금(세금 인출 등) 영속성 관리 모듈 (Account Manager)
 데이터 파일(data/accounts.json)을 통해 사용자의 계좌 정보 및 일일 실매매 기록을 영구 보존합니다.
 미국 증시 개장일 캘린더를 연동하여 Next Day(다음 거래일) 진행, 당일 종가 및 체결 정산,
@@ -65,7 +65,7 @@ class AccountManager:
             print(f"계좌 파일 로드 중 오류: {e}")
             return []
 
-    def save_accounts(self, accounts: list, skip_cloud_sync: bool = False):
+    def save_accounts(self, accounts: list):
         """계좌 및 거래 일지 데이터를 서버 로컬 스토리지에 안전하게 영구 저장 (자동 백업 포함)"""
         tmp_file = f"{self.filepath}.tmp"
         with open(tmp_file, 'w', encoding='utf-8') as f:
