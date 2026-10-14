@@ -465,8 +465,6 @@ function renderAccountsGrid(accounts) {
   }
 
   container.innerHTML = accounts.map(acc => {
-    const isOwner = acc.is_my_account || (state.user && acc.owner === state.user.username);
-    const ownerBadge = isOwner ? `<span class="badge badge-owner">⭐ 내 계좌 (${state.user ? state.user.username : 'Owner'})</span>` : '';
     const modeClass = acc.mode === 'Safe' ? 'badge-mode-safe' : (acc.mode === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
     const stateClass = acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done';
     const stateText = acc.operational_state === 'WAITING_FOR_FILL' ? '장전 대기' : '정산 완료';
@@ -483,7 +481,6 @@ function renderAccountsGrid(accounts) {
             <div class="card-title">
               <h3>${acc.name}</h3>
               <div style="margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap;">
-                ${ownerBadge}
                 ${autoTradeBadge}
                 <span class="badge badge-ticker">${acc.ticker}</span>
                 <span class="badge ${modeClass}">${acc.mode}</span>
