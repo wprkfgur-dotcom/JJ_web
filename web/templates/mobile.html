@@ -395,19 +395,33 @@
       </div>
 
 
-      <!-- 오라클 자동매매 봇 -->
+      <!-- 오라클 자동매매 스케줄러 -->
       <div class="m-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-          <div style="font-size:0.9rem;font-weight:800;color:#fff;">🤖 오라클 자동매매 봇</div>
-          <span class="m-badge m-badge-neutral" id="m-at-status-badge">비활성화</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+          <div style="font-size:0.9rem;font-weight:800;color:#fff;">🤖 자동매매 정기 스케줄러</div>
+          <label class="toggle-switch-ui" style="position:relative;display:inline-block;width:40px;height:20px;">
+            <input type="checkbox" id="m-sched-enabled-toggle" checked onchange="mSaveScheduleConfig()">
+            <span class="toggle-switch-slider"></span>
+          </label>
         </div>
-        <div style="font-size:0.75rem;color:var(--m-text-secondary);margin-bottom:0.75rem;">
-          매일 미국 장 개장 전 자동으로 당일 주문표를 연산하고 텔레그램으로 전송합니다.
+        
+        <div class="m-form-group" style="margin-bottom:0.6rem;">
+          <label class="m-form-label" style="font-size:0.75rem;">🚀 LOC 주문 전송 시각 (KST)</label>
+          <input type="time" id="m-sched-order-time" class="m-form-input" value="20:20" style="padding:4px 8px;">
         </div>
-        <button class="m-btn m-btn-primary m-btn-sm" onclick="mToggleAutotrade()">
-          자동매매 봇 상태 토글
-        </button>
-        <input type="checkbox" id="m-at-toggle" style="display:none;">
+
+        <div class="m-form-group" style="margin-bottom:0.75rem;">
+          <label class="m-form-label" style="font-size:0.75rem;">📝 아침 결산 & 익일진행 시각 (KST)</label>
+          <input type="time" id="m-sched-settle-time" class="m-form-input" value="05:10" style="padding:4px 8px;">
+        </div>
+
+        <div style="display:flex;gap:0.4rem;margin-bottom:0.5rem;">
+          <button class="m-btn m-btn-primary m-btn-sm" style="flex:1;" onclick="mSaveScheduleConfig()">💾 스케줄 저장</button>
+        </div>
+        <div style="display:flex;gap:0.4rem;">
+          <button class="m-btn m-btn-secondary m-btn-sm" style="flex:1;" onclick="mTriggerOrders()" title="주문 즉시 실행">🚀 주문 즉시 실행</button>
+          <button class="m-btn m-btn-secondary m-btn-sm" style="flex:1;" onclick="mTriggerSettlement()" title="결산 즉시 실행">📝 결산 즉시 실행</button>
+        </div>
       </div>
 
       <div class="m-switch-view-bar" style="margin-top:2rem;">
@@ -568,6 +582,6 @@
   <div class="m-toast" id="m-toast-box"></div>
 
   <!-- Mobile JavaScript -->
-  <script src="/static/js/mobile.js?v=2.4.4.0"></script>
+  <script src="/static/js/mobile.js?v=2.4.5.0"></script>
 </body>
 </html>

@@ -99,3 +99,10 @@ class AccountBrokerConfigRequest(BaseModel):
     app_secret: Optional[str] = Field(default=None)
 
 
+class SchedulerConfigRequest(BaseModel):
+    enabled: bool = Field(default=True)
+    order_time: str = Field(default="20:20", example="20:20")
+    settle_time: str = Field(default="05:10", example="05:10")
+
+
+

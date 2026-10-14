@@ -1738,6 +1738,7 @@ function switchSettingTab(tab) {
     loadAdminUsers();
   } else if (tab === 'autotrade') {
     loadServerStatus();
+    loadScheduleConfig();
   }
 }
 
@@ -1855,6 +1856,90 @@ async function saveActiveSettings() {
     } catch (e) {
       showToast('설정 저장 실패', 'error');
     }
+  }
+}
+
+// -------------------------------------------------------------------
+// 자동매매 정기 스케줄러 설정 (주문 20:20, 결산 05:10)
+// -------------------------------------------------------------------
+async function loadScheduleConfig() {
+  const orderInput = document.getElementById('sched-order-time');
+  const settleInput = document.getElementById('sched-settle-time');
+  const toggle = document.getElementById('sched-enabled-toggle');
+  const statusEl = document.getElementById('sched-last-run-status');
+  if (!orderInput || !settleInput) return;
+
+  try {
+    const res = await fetch('/api/autotrade/schedule');
+    const data = await res.json();
+    if (data.success && data.config) {
+      const cfg = data.config;
+      orderInput.value = cfg.order_time || '20:20';
+      settleInput.value = cfg.settle_time || '05:10';
+      if (toggle) toggle.checked = cfg.enabled !== false;
+      if (statusEl) {
+        statusEl.textContent = cfg.last_order_status || cfg.last_settle_status || '정상 대기 중';
+      }
+    }
+  } catch (e) {
+    console.error('스케줄 설정 로드 실패:', e);
+  }
+}
+
+async function saveScheduleConfig() {
+  const order_time = document.getElementById('sched-order-time').value.trim() || '20:20';
+  const settle_time = document.getElementById('sched-settle-time').value.trim() || '05:10';
+  const toggle = document.getElementById('sched-enabled-toggle');
+  const enabled = toggle ? toggle.checked : true;
+
+  try {
+    const res = await fetch('/api/autotrade/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_time, settle_time, enabled })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('🎉 자동매매 스케줄(주문/결산 시각)이 저장되었습니다!');
+    } else {
+      showToast(`저장 실패: ${data.message}`, 'error');
+    }
+  } catch (e) {
+    showToast(`저장 오류: ${e.message}`, 'error');
+  }
+}
+
+async function triggerManualOrders() {
+  if (!confirm('현재 자동매매 활성화 계좌들의 당일 LOC 주문표를 지금 즉시 메리츠증권으로 전송하시겠습니까?')) return;
+  try {
+    showToast('⏳ 정기 자동매매 주문 전송을 실행하고 있습니다...');
+    const res = await fetch('/api/autotrade/run-orders', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`🎉 총 ${data.count}개 계좌 주문 전송 완료! (텔레그램 전송 확인)`);
+      await loadAccounts();
+    } else {
+      showToast(`실행 실패: ${data.message}`, 'error');
+    }
+  } catch (e) {
+    showToast(`실행 오류: ${e.message}`, 'error');
+  }
+}
+
+async function triggerManualSettlement() {
+  if (!confirm('현재 SOXL 최신 종가 및 체결 내역으로 정산하고 다음 거래일로 즉시 진행하시겠습니까?')) return;
+  try {
+    showToast('⏳ 일일 결산 및 익일 진행을 실행하고 있습니다...');
+    const res = await fetch('/api/autotrade/run-settlement', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`🎉 결산 완료 (종가: $${data.close_price})! 다음 거래일로 갱신되었습니다.`);
+      await loadAccounts();
+    } else {
+      showToast(`결산 실패: ${data.message}`, 'error');
+    }
+  } catch (e) {
+    showToast(`결산 오류: ${e.message}`, 'error');
   }
 }
 

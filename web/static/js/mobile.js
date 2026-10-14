@@ -892,7 +892,7 @@ function renderMobileChart(data) {
 }
 
 // =====================================================================
-// Settings (Telegram, Google Sync, Autotrade, Admin)
+// Settings (Telegram, Schedule, Autotrade)
 // =====================================================================
 async function loadSettings() {
   try {
@@ -903,16 +903,88 @@ async function loadSettings() {
       document.getElementById('m-tg-chatid').value = tg.chat_id || '';
       document.getElementById('m-tg-enabled').checked = tg.enabled;
     }
-    
-    
-    const atRes = await mApi('/api/autotrade/status');
-    if (atRes.ok) {
-      const at = await atRes.json();
-      document.getElementById('m-at-toggle').checked = at.enabled;
-      document.getElementById('m-at-status-badge').textContent = at.status;
-    }
+
+    await mLoadScheduleConfig();
   } catch (e) {
     console.error('설정 로드 오류:', e);
+  }
+}
+
+async function mLoadScheduleConfig() {
+  const orderEl = document.getElementById('m-sched-order-time');
+  const settleEl = document.getElementById('m-sched-settle-time');
+  const toggleEl = document.getElementById('m-sched-enabled-toggle');
+  if (!orderEl || !settleEl) return;
+
+  try {
+    const res = await mApi('/api/autotrade/schedule');
+    if (res.ok) {
+      const d = await res.json();
+      if (d.success && d.config) {
+        orderEl.value = d.config.order_time || '20:20';
+        settleEl.value = d.config.settle_time || '05:10';
+        if (toggleEl) toggleEl.checked = d.config.enabled !== false;
+      }
+    }
+  } catch (e) {
+    console.error('모바일 스케줄 로드 오류:', e);
+  }
+}
+
+async function mSaveScheduleConfig() {
+  const order_time = document.getElementById('m-sched-order-time').value.trim() || '20:20';
+  const settle_time = document.getElementById('m-sched-settle-time').value.trim() || '05:10';
+  const toggleEl = document.getElementById('m-sched-enabled-toggle');
+  const enabled = toggleEl ? toggleEl.checked : true;
+
+  try {
+    const res = await mApi('/api/autotrade/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_time, settle_time, enabled })
+    });
+    const d = await res.json();
+    if (d.success) {
+      mToast('🎉 스케줄 설정(주문/결산 시각)이 저장되었습니다!');
+    } else {
+      mToast(`저장 실패: ${d.message}`, true);
+    }
+  } catch (e) {
+    mToast(`오류: ${e.message}`, true);
+  }
+}
+
+async function mTriggerOrders() {
+  if (!confirm('현재 자동매매 활성화 계좌들의 LOC 주문표를 지금 즉시 전송하시겠습니까?')) return;
+  try {
+    mToast('⏳ LOC 주문을 전송하고 있습니다...');
+    const res = await mApi('/api/autotrade/run-orders', { method: 'POST' });
+    const d = await res.json();
+    if (d.success) {
+      mToast(`🎉 총 ${d.count}개 계좌 주문 전송 완료!`);
+      await loadAccounts();
+    } else {
+      mToast(`실패: ${d.message}`, true);
+    }
+  } catch (e) {
+    mToast(`오류: ${e.message}`, true);
+  }
+}
+
+async function mTriggerSettlement() {
+  if (!confirm('SOXL 최신 종가 및 체결 내역으로 정산하고 다음 거래일로 즉시 진행하시겠습니까?')) return;
+  try {
+    mToast('⏳ 결산 및 익일 진행 중...');
+    const res = await mApi('/api/autotrade/run-settlement', { method: 'POST' });
+    const d = await res.json();
+    if (d.success) {
+      mToast(`🎉 결산 완료 (종가: $${d.close_price})! 다음 거래일로 갱신되었습니다.`);
+      await loadAccounts();
+    } else {
+      mToast(`실패: ${d.message}`, true);
+    }
+  } catch (e) {
+    mToast(`오류: ${e.message}`, true);
   }
 }
 
@@ -928,7 +1000,7 @@ async function mSaveTelegram() {
       body: JSON.stringify({ bot_token: token, chat_id, enabled, notify_on_orders: true })
     });
     if (!res.ok) throw new Error('저장 실패');
-    mToast('텔레그램 설정이 저장되었습니다.');
+    mToast('텔레그램 설정이 저장되었습니다!');
   } catch (e) {
     mToast(e.message, true);
   }
@@ -949,15 +1021,7 @@ async function mTestTelegram() {
   }
 }
 
-
 async function mToggleAutotrade() {
-  try {
-    const res = await mApi('/api/autotrade/toggle', { method: 'POST' });
-    const d = await res.json();
-    document.getElementById('m-at-toggle').checked = d.enabled;
-    document.getElementById('m-at-status-badge').textContent = d.status;
-    mToast(`자동매매 봇이 ${d.enabled ? '활성화' : '비활성화'}되었습니다.`);
-  } catch (e) {
-    mToast(e.message, true);
-  }
+  await mSaveScheduleConfig();
 }
+

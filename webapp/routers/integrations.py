@@ -18,6 +18,7 @@ from ..schemas import (
     MeritzConfigRequest,
     MeritzTestRequest,
     MeritzOrderExecuteRequest,
+    SchedulerConfigRequest,
 )
 
 router = APIRouter()
@@ -152,5 +153,44 @@ async def execute_meritz_orders(req: MeritzOrderExecuteRequest):
         "results": batch_res,
         "message": f"[{ticker}] 총 {batch_res['total_success']}건 주문 접수 완료 (실패: {batch_res['total_failed']}건)"
     }
+
+
+# -------------------------------------------------------------------
+# 자동매매 정기 스케줄러 설정 및 수동 실행 API
+# -------------------------------------------------------------------
+@router.get("/api/autotrade/schedule")
+async def get_schedule():
+    """자동매매 정기 스케줄(주문 20:20, 결산 05:10 등) 설정 조회"""
+    from core.autotrade_scheduler import get_scheduler_config
+    return {"success": True, "config": get_scheduler_config()}
+
+
+@router.post("/api/autotrade/schedule")
+async def save_schedule(req: SchedulerConfigRequest):
+    """자동매매 정기 스케줄 시간 변경 및 저장"""
+    from core.autotrade_scheduler import get_scheduler_config, save_scheduler_config
+    cfg = get_scheduler_config()
+    cfg["enabled"] = bool(req.enabled)
+    cfg["order_time"] = req.order_time.strip() if req.order_time else "20:20"
+    cfg["settle_time"] = req.settle_time.strip() if req.settle_time else "05:10"
+    save_scheduler_config(cfg)
+    return {"success": True, "message": "자동매매 스케줄 설정이 저장되었습니다.", "config": cfg}
+
+
+@router.post("/api/autotrade/run-orders")
+async def trigger_run_orders(dry_run: bool = False):
+    """자동매매 활성 계좌의 당일 LOC 주문 즉시 실행 (수동/테스트 트리거)"""
+    from core.autotrade_scheduler import run_daily_orders
+    res = await run_daily_orders(dry_run=dry_run)
+    return res
+
+
+@router.post("/api/autotrade/run-settlement")
+async def trigger_run_settlement():
+    """자동매매 활성 계좌의 일일 결산 및 익일 진행 즉시 실행 (수동/테스트 트리거)"""
+    from core.autotrade_scheduler import run_daily_settlement
+    res = await run_daily_settlement()
+    return res
+
 
 

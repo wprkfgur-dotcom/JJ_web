@@ -808,24 +808,32 @@
                 </p>
               </div>
 
-              <div style="background:rgba(15,23,42,0.8);padding:0.85rem 1rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
-                <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.825rem;">
-                  <span style="color:var(--text-muted);">현재 실행 상태:</span>
-                  <span id="bot-status-text" style="color:var(--accent-cyan);font-weight:700;">IDLE (대기중)</span>
+              <div style="background:rgba(15,23,42,0.8);padding:0.85rem 1rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);display:flex;flex-direction:column;gap:0.75rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.825rem;">
+                  <span style="color:var(--text-muted);">정기 자동매매 스케줄러:</span>
+                  <label class="toggle-switch-ui" style="position:relative;display:inline-block;width:44px;height:22px;">
+                    <input type="checkbox" id="sched-enabled-toggle" checked onchange="saveScheduleConfig()">
+                    <span class="toggle-switch-slider"></span>
+                  </label>
                 </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.825rem;">
-                  <span style="color:var(--text-muted);">데몬 실행 주기:</span>
-                  <span>미국 장전 (22:30 KST) / 장후 (05:00 KST)</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.825rem;">
+                  <label for="sched-order-time" style="color:var(--text-primary);font-weight:600;margin:0;">🚀 LOC 주문 실행 시각 (KST):</label>
+                  <input type="time" id="sched-order-time" class="form-input" style="width:120px;padding:4px 8px;font-size:0.85rem;" value="20:20">
                 </div>
-                <div style="display:flex;justify-content:space-between;font-size:0.825rem;">
-                  <span style="color:var(--text-muted);">서버 OS 플랫폼:</span>
-                  <span style="color:var(--accent-cyan);">Oracle Linux / Ubuntu 22.04 LTS</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.825rem;">
+                  <label for="sched-settle-time" style="color:var(--text-primary);font-weight:600;margin:0;">📝 마감 결산 & 익일진행 (KST):</label>
+                  <input type="time" id="sched-settle-time" class="form-input" style="width:120px;padding:4px 8px;font-size:0.85rem;" value="05:10">
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:0.775rem;color:var(--text-muted);border-top:1px solid rgba(255,255,255,0.06);padding-top:0.4rem;">
+                  <span>최근 실행:</span>
+                  <span id="sched-last-run-status" style="color:var(--accent-cyan);">대기 중</span>
                 </div>
               </div>
 
-              <div style="display:flex;gap:0.75rem;">
-                <button class="btn btn-success" id="btn-bot-toggle" onclick="toggleAutotrade()">자동매매 시작</button>
-                <button class="btn btn-secondary" onclick="loadServerStatus()">상태 새로고침</button>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <button class="btn btn-primary btn-sm" onclick="saveScheduleConfig()" style="flex:1;">💾 스케줄 설정 저장</button>
+                <button class="btn btn-secondary btn-sm" onclick="triggerManualOrders()" style="flex:1;" title="등록된 LOC 주문 즉시 전송 테스트">🚀 주문 즉시 실행</button>
+                <button class="btn btn-secondary btn-sm" onclick="triggerManualSettlement()" style="flex:1;" title="마감 종가 기반 정산 및 다음날 진행">📝 결산 즉시 실행</button>
               </div>
             </div>
 
@@ -1045,6 +1053,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.4.4.0"></script>
+  <script src="/static/js/app.js?v=2.4.5.0"></script>
 </body>
 </html>

@@ -21,13 +21,31 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import asyncio
+from contextlib import asynccontextmanager
+
 from webapp.config import STATIC_DIR  # noqa: E402  (core 모듈 sys.path 등록 포함)
 from webapp.routers import accounts, auth, backtest, integrations, market, pages  # noqa: E402
+from core.autotrade_scheduler import scheduler_background_loop
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 자동매매 스케줄러 백그라운드 태스크 기동
+    task = asyncio.create_task(scheduler_background_loop())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
 
 app = FastAPI(
     title="JJ Invest Web Trading Platform",
     description="종종이 3단계 LOC & 무한매수 주식 매매 시스템 (Web Edition)",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
