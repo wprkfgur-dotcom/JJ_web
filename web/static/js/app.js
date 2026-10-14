@@ -1153,7 +1153,8 @@ function renderDetailSubTabs(data) {
 
     stratPane.innerHTML = `
       <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.5rem; max-width: 900px; margin: 0 auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem;">
+        <!-- 상단 헤더 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
           <div>
             <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
               <span>⚙️</span> 계좌별 맞춤 전략 운용 변수 설정
@@ -1165,140 +1166,151 @@ function renderDetailSubTabs(data) {
           <span class="badge badge-ticker">${acc.name}</span>
         </div>
 
-        <!-- 3분할 파라미터 그리드 (제공된 시트 서식 완벽 대응) -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.5rem;">
-          
-          <!-- 카드 1: 기본 운용 기간 & 위기준비금 -->
+        <!-- 1. 기본 기간 & 위기준비금 & 수수료율 (2분할 상단 카드) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
+          <!-- 기간 & 자산 배분 -->
           <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
             <div style="font-weight: 700; color: #f59e0b; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
               <span>⏳</span> 기간 & 자산 배분
             </div>
-            
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                <span>보유일수 (만기)</span>
-                <span style="color: var(--text-muted); font-size: 0.75rem;">기준 10일</span>
-              </label>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="number" id="sp-max-hold-days" class="form-control" value="${maxHoldDays}" min="1" max="60" step="1" style="font-weight: 700; text-align: right;">
-                <span style="color: var(--text-muted); font-size: 0.85rem; min-width: 28px;">일</span>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 0.5rem;">
-              <label style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                <span>위기준비금 비율</span>
-                <span style="color: var(--text-muted); font-size: 0.75rem;">기준 5.00%</span>
-              </label>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <input type="number" id="sp-reserve-ratio" class="form-control" value="${reserveRatioPct}" min="0" max="50" step="0.25" style="font-weight: 700; text-align: right;">
-                <span style="color: var(--text-muted); font-size: 0.85rem; min-width: 28px;">%</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 카드 2: 모드별 매도 목표수익률 & 분할수 -->
-          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
-            <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
-              <span>🎯</span> 시장 모드별 매도 & 분할수
-            </div>
-
-            <!-- Normal -->
-            <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 4px; padding: 0.6rem; margin-bottom: 0.75rem;">
-              <div style="font-size: 0.82rem; font-weight: 700; color: #10b981; margin-bottom: 4px;">Normal (상승장/평상시)</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                <div>
-                  <label style="font-size: 0.73rem; color: var(--text-muted);">매도 목표수익률</label>
-                  <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <input type="number" id="sp-normal-yield" class="form-control" value="${normalYieldPct}" step="0.05" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">%</span>
-                  </div>
-                </div>
-                <div>
-                  <label style="font-size: 0.73rem; color: var(--text-muted);">분할 조각수</label>
-                  <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <input type="number" id="sp-normal-splits" class="form-control" value="${normalSplits}" step="1" min="1" max="50" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">조각</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Safe -->
-            <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 4px; padding: 0.6rem; margin-bottom: 0.75rem;">
-              <div style="font-size: 0.82rem; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">Safe (주의/보수 모드)</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                <div>
-                  <label style="font-size: 0.73rem; color: var(--text-muted);">매도 목표수익률</label>
-                  <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <input type="number" id="sp-safe-yield" class="form-control" value="${safeYieldPct}" step="0.05" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">%</span>
-                  </div>
-                </div>
-                <div>
-                  <label style="font-size: 0.73rem; color: var(--text-muted);">분할 조각수</label>
-                  <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <input type="number" id="sp-safe-splits" class="form-control" value="${safeSplits}" step="1" min="1" max="50" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">조각</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Riskoff -->
-            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 4px; padding: 0.6rem;">
-              <div style="font-size: 0.82rem; font-weight: 700; color: #ef4444; margin-bottom: 4px;">Riskoff (위기/폭락장 탈출 모드)</div>
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                <div>
-                  <label style="font-size: 0.73rem; color: var(--text-muted);">매도 목표수익률</label>
-                  <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <input type="number" id="sp-riskoff-yield" class="form-control" value="${riskoffYieldPct}" step="0.05" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">%</span>
-                  </div>
-                </div>
-                <div>
-                  <label style="font-size: 0.73rem; color: var(--text-muted);">분할 조각수</label>
-                  <div style="display: flex; align-items: center; gap: 0.2rem;">
-                    <input type="number" id="sp-riskoff-splits" class="form-control" value="${riskoffSplits}" step="1" min="1" max="50" style="text-align: right; padding: 0.3rem 0.5rem; font-size: 0.85rem; font-weight: 700;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted);">조각</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 카드 3: 수수료율 설정 -->
-          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; flex-direction: column; justify-content: space-between;">
-            <div>
-              <div style="font-weight: 700; color: #a78bfa; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
-                <span>💳</span> 거래 수수료
-              </div>
-
-              <div class="form-group" style="margin-bottom: 1rem;">
-                <label style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                  <span>수수료율</span>
-                  <span style="color: var(--text-muted); font-size: 0.75rem;">기준 0.000%</span>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+              <div class="form-group">
+                <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                  <span>보유일수 (만기)</span>
+                  <span style="color: var(--text-muted); font-size: 0.72rem;">기준 10일</span>
                 </label>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <input type="number" id="sp-fee-rate" class="form-control" value="${feeRatePct}" min="0" max="5" step="0.005" style="font-weight: 700; text-align: right;">
-                  <span style="color: var(--text-muted); font-size: 0.85rem; min-width: 28px;">%</span>
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <input type="number" id="sp-max-hold-days" class="form-input" value="${maxHoldDays}" min="1" max="60" step="1" style="font-weight: 700; text-align: right; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                  <span style="color: var(--text-muted); font-size: 0.82rem; white-space: nowrap;">일</span>
                 </div>
               </div>
 
-              <div style="padding: 0.75rem; background: rgba(0,0,0,0.25); border-radius: 4px; font-size: 0.75rem; color: var(--text-muted); line-height: 1.45;">
-                💡 <strong>안내:</strong><br>
-                - 최초원금, SEC Fee, 수수료합은 시스템 자동 산출되므로 별도 설정할 필요가 없습니다.<br>
-                - 설정 저장 시 즉시 해당 계좌의 당일 LOC 주문표 및 매수/매도 수량이 자동 재계산됩니다.
+              <div class="form-group">
+                <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                  <span>위기준비금 비율</span>
+                  <span style="color: var(--text-muted); font-size: 0.72rem;">기준 5.00%</span>
+                </label>
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <input type="number" id="sp-reserve-ratio" class="form-input" value="${reserveRatioPct}" min="0" max="50" step="0.25" style="font-weight: 700; text-align: right; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                  <span style="color: var(--text-muted); font-size: 0.82rem; white-space: nowrap;">%</span>
+                </div>
               </div>
-            </div>
-
-            <div style="margin-top: 1.25rem;">
-              <button type="button" class="btn btn-primary" onclick="saveAccountStrategyParams('${acc.id}')" style="width: 100%; padding: 0.75rem; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                <span>💾</span> 전략 운용 설정 저장
-              </button>
             </div>
           </div>
 
+          <!-- 거래 수수료 -->
+          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
+            <div style="font-weight: 700; color: #a78bfa; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+              <span>💳</span> 거래 수수료율
+            </div>
+            <div class="form-group">
+              <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>수수료율</span>
+                <span style="color: var(--text-muted); font-size: 0.72rem;">기준 0.000% (매매 체결 시)</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.4rem; max-width: 200px;">
+                <input type="number" id="sp-fee-rate" class="form-input" value="${feeRatePct}" min="0" max="5" step="0.005" style="font-weight: 700; text-align: right; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                <span style="color: var(--text-muted); font-size: 0.82rem; white-space: nowrap;">%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 시장 모드별 매도 & 분할수 (표 테이블 형태로 넉넉하고 깨짐 없는 레이아웃) -->
+        <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.25rem; margin-bottom: 1.25rem;">
+          <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+            <span>🎯</span> 시장 모드별 매도 목표수익률 & 분할 매수 조각수
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table class="custom-table" style="width: 100%; margin: 0; border-collapse: collapse;">
+              <thead>
+                <tr style="background: rgba(15, 23, 42, 0.7);">
+                  <th style="padding: 0.75rem 1rem; text-align: left; width: 34%; font-size: 0.85rem;">시장 구분 모드</th>
+                  <th style="padding: 0.75rem 1rem; text-align: center; width: 33%; font-size: 0.85rem;">매도 목표수익률 (%)</th>
+                  <th style="padding: 0.75rem 1rem; text-align: center; width: 33%; font-size: 0.85rem;">분할 조각수 (조각)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Normal -->
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(16, 185, 129, 0.05);">
+                  <td style="padding: 0.85rem 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span class="badge badge-mode-normal" style="font-size: 0.82rem; padding: 4px 10px; font-weight: 700;">Normal</span>
+                      <span style="font-size: 0.8rem; color: #10b981;">상승장 / 평상시</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.85rem 1rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; max-width: 150px;">
+                      <input type="number" id="sp-normal-yield" class="form-input" value="${normalYieldPct}" step="0.05" style="text-align: right; font-weight: 700; color: #10b981; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                      <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">%</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.85rem 1rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; max-width: 150px;">
+                      <input type="number" id="sp-normal-splits" class="form-input" value="${normalSplits}" step="1" min="1" max="50" style="text-align: right; font-weight: 700; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                      <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">조각</span>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Safe -->
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(56, 189, 248, 0.05);">
+                  <td style="padding: 0.85rem 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span class="badge badge-mode-safe" style="font-size: 0.82rem; padding: 4px 10px; font-weight: 700;">Safe</span>
+                      <span style="font-size: 0.8rem; color: #38bdf8;">주의 / 보수 모드</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.85rem 1rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; max-width: 150px;">
+                      <input type="number" id="sp-safe-yield" class="form-input" value="${safeYieldPct}" step="0.05" style="text-align: right; font-weight: 700; color: #38bdf8; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                      <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">%</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.85rem 1rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; max-width: 150px;">
+                      <input type="number" id="sp-safe-splits" class="form-input" value="${safeSplits}" step="1" min="1" max="50" style="text-align: right; font-weight: 700; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                      <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">조각</span>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Riskoff -->
+                <tr style="background: rgba(239, 68, 68, 0.05);">
+                  <td style="padding: 0.85rem 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span class="badge badge-mode-riskoff" style="font-size: 0.82rem; padding: 4px 10px; font-weight: 700;">Riskoff</span>
+                      <span style="font-size: 0.8rem; color: #ef4444;">위기 / 폭락장 탈출</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.85rem 1rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; max-width: 150px;">
+                      <input type="number" id="sp-riskoff-yield" class="form-input" value="${riskoffYieldPct}" step="0.05" style="text-align: right; font-weight: 700; color: #ef4444; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                      <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">%</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.85rem 1rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%; max-width: 150px;">
+                      <input type="number" id="sp-riskoff-splits" class="form-input" value="${riskoffSplits}" step="1" min="1" max="50" style="text-align: right; font-weight: 700; width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                      <span style="color: var(--text-muted); font-size: 0.85rem; white-space: nowrap;">조각</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 3. 하단 안내문구 & 저장 버튼 바 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; padding: 1.1rem; background: rgba(30, 41, 59, 0.4); border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.06);">
+          <div style="font-size: 0.775rem; color: var(--text-muted); line-height: 1.5; max-width: 580px;">
+            💡 <strong>안내:</strong> 최초원금, SEC Fee, 수수료합은 시스템 자동 산출되므로 별도 설정할 필요가 없습니다.<br>
+            설정 저장 시 즉시 해당 계좌의 당일 LOC 주문표 및 매수/매도 수량이 자동 재계산됩니다.
+          </div>
+          <button type="button" class="btn btn-primary" onclick="saveAccountStrategyParams('${acc.id}')" style="padding: 0.75rem 1.75rem; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);">
+            <span>💾</span> 전략 운용 설정 저장
+          </button>
         </div>
       </div>
     `;
