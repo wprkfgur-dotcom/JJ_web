@@ -147,18 +147,6 @@ function showAppView() {
   if (state.user) {
     const nameEl = document.getElementById('user-display-name');
     if (nameEl) nameEl.textContent = state.user.name || state.user.username;
-    const linkedEl = document.getElementById('user-linked-badge');
-    if (linkedEl) {
-      if (state.accounts && state.accounts.length > 0) {
-        if (state.accounts.length === 1) {
-          linkedEl.textContent = `연동: ${state.accounts[0].name} (${state.accounts[0].ticker})`;
-        } else {
-          linkedEl.textContent = `연동: ${state.accounts[0].name} 외 ${state.accounts.length - 1}개`;
-        }
-      } else {
-        linkedEl.textContent = '연동 계좌 조회 중...';
-      }
-    }
 
     // 관리자(Admin) 전용 회원 관리 설정 탭 노출 여부 제어
     const adminSettingBtn = document.getElementById('btn-setting-tab-admin');
@@ -438,19 +426,6 @@ async function loadAccounts(isSilent = false) {
     renderAssetTrendChart(data.portfolio);
     renderAllocationDonut(data.accounts);
 
-    // 헤더 사용자 계좌 상태 업데이트
-    if (state.user) {
-      const linkedEl = document.getElementById('user-linked-badge');
-      if (linkedEl) {
-        if (!data.accounts || data.accounts.length === 0) {
-          linkedEl.textContent = '연동: 등록된 계좌 없음';
-        } else if (data.accounts.length === 1) {
-          linkedEl.textContent = `연동: ${data.accounts[0].name} (${data.accounts[0].ticker})`;
-        } else {
-          linkedEl.textContent = `연동: ${data.accounts[0].name} 외 ${data.accounts.length - 1}개`;
-        }
-      }
-    }
   } catch (e) {
     if (!isSilent) showToast('계좌 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
   }
