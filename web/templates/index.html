@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="/static/css/style.css?v=2.4.3.5">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.4.3.6">
   
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -48,7 +48,7 @@
       <div id="auth-alert-box" class="login-error-box" style="display:none;"></div>
 
       <!-- 1. LOGIN FORM -->
-      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+      <form id="login-form" onsubmit="handleLoginSubmit(event); return false;">
         <div class="form-group" style="margin-bottom: 1.15rem;">
           <label for="login-username">사용자 아이디 (User ID)</label>
           <div class="input-with-icon">
@@ -84,7 +84,7 @@
       </form>
 
       <!-- 2. REGISTER FORM -->
-      <form id="register-form" onsubmit="handleRegisterSubmit(event)" style="display:none;">
+      <form id="register-form" onsubmit="handleRegisterSubmit(event); return false;" style="display:none;">
         <div class="form-group" style="margin-bottom: 1.1rem;">
           <label for="reg-email">이메일 주소 (Email) *</label>
           <div class="input-with-icon">
@@ -1086,6 +1086,6 @@ function doPost(e) {
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.4.3.5"></script>
+  <script src="/static/js/app.js?v=2.4.3.6"></script>
 </body>
 </html>
