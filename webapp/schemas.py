@@ -71,3 +71,22 @@ class TelegramConfigRequest(BaseModel):
 class TelegramTestRequest(BaseModel):
     bot_token: Optional[str] = None
     chat_id: Optional[str] = None
+
+
+class MeritzConfigRequest(BaseModel):
+    app_key: str = Field(default="", example="발급받은_App_Key")
+    app_secret: str = Field(default="", example="발급받은_App_Secret")
+    is_simulation: bool = Field(default=True)
+    enabled: bool = Field(default=True)
+
+
+class MeritzTestRequest(BaseModel):
+    app_key: Optional[str] = None
+    app_secret: Optional[str] = None
+
+
+class MeritzOrderExecuteRequest(BaseModel):
+    account_id: str
+    symbol: Optional[str] = None
+    dry_run: Optional[bool] = None
+

@@ -32,7 +32,7 @@ def _summarize_account(acc: dict, owner: str):
     """
     details = am.compute_account_details(acc)
 
-    seed = float(details.get("initial_seed") or acc.get("initial_seed", 0.0))
+    seed = float(details.get("net_invested") or details.get("initial_seed") or acc.get("initial_seed", 0.0))
     asset = float(_pick(details, "current_asset", acc.get("total_asset", seed)))
     cash = float(_pick(details, "current_cash", acc.get("current_cash", seed)))
     hold = int(_pick(details, "current_hold", acc.get("current_holdings", 0)))

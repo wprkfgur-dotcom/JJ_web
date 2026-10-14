@@ -1,4 +1,4 @@
-﻿"""
+"""
 계좌 관리 및 자산 입출금(세금 인출 등) 영속성 관리 모듈 (Account Manager)
 데이터 파일(data/accounts.json)을 통해 사용자의 계좌 정보 및 일일 실매매 기록을 영구 보존합니다.
 미국 증시 개장일 캘린더를 연동하여 Next Day(다음 거래일) 진행, 당일 종가 및 체결 정산,
@@ -44,7 +44,8 @@ class AccountManager:
                 return []
             with open(self.filepath, 'r', encoding='utf-8') as f:
                 accounts = json.load(f)
-            # 미매도 슬롯의 실현손익 및 매도정보 정제 (한 행은 하나의 슬롯)
+            # 미매도 슬롯의 실현손익 및 매도정보 정제 및 잔고/시드 동기화
+            updated = False
             for acc in accounts:
                 for r in acc.get('trade_records', []):
                     if not r.get('Sold', False):
@@ -52,10 +53,75 @@ class AccountManager:
                         r['ProfitRate'] = None
                         r['W'] = None
                         r['X'] = None
+                if self.sync_account_balances(acc):
+                    updated = True
+            if updated:
+                self.save_accounts(accounts)
             return accounts
         except Exception as e:
             print(f"계좌 파일 로드 중 오류: {e}")
             return []
+
+    def sync_account_balances(self, target: dict) -> bool:
+        """
+        계좌의 초기 시드(initial_seed) 및 입출금 내역(adjustments)을 바탕으로
+        현재 현금(current_cash), 총 평가자산(total_asset), 실투자원금(AR), 위기준비금(AK)을
+        실시간으로 완벽하게 동기화합니다.
+        """
+        changed = False
+        initial_seed = float(target.get('initial_seed', 100000.0))
+        reserve_ratio = float(target.get('reserve_ratio', 0.05))
+        adjustments = target.get('adjustments', [])
+        records = target.get('trade_records', [])
+
+        total_deposited = sum(float(a.get('amount', 0.0)) for a in adjustments if a.get('type') == 'DEPOSIT')
+        total_withdrawn = sum(float(a.get('amount', 0.0)) for a in adjustments if a.get('type') == 'WITHDRAW')
+        net_adj = total_deposited - total_withdrawn
+
+        effective_capital = initial_seed + net_adj
+        cur_ar = round(effective_capital * (1.0 - reserve_ratio), 2)
+        cur_ak = round(effective_capital * reserve_ratio, 2)
+
+        last_applied = float(target.get('last_applied_adj', 0.0))
+        unapplied = round(net_adj - last_applied, 2)
+
+        if unapplied != 0.0:
+            target['current_cash'] = round(float(target.get('current_cash', initial_seed)) + unapplied, 2)
+            target['total_asset'] = round(float(target.get('total_asset', initial_seed)) + unapplied, 2)
+            if records:
+                last_r = records[-1]
+                last_r['Cash'] = round(float(last_r.get('Cash', 0.0)) + unapplied, 2)
+                c_p = float(last_r.get('Close', 0.0))
+                h = int(last_r.get('Hold', 0))
+                last_r['Asset'] = round(float(last_r['Cash']) + c_p * h, 2)
+                target['total_asset'] = last_r['Asset']
+                target['current_cash'] = last_r['Cash']
+            target['last_applied_adj'] = net_adj
+            changed = True
+
+        if records:
+            last_r = records[-1]
+            if last_r.get('AR') != cur_ar or last_r.get('AK') != cur_ak:
+                last_r['AR'] = cur_ar
+                last_r['AK'] = cur_ak
+                changed = True
+            c_p = float(last_r.get('Close', 0.0))
+            h = int(last_r.get('Hold', 0))
+            expected_asset = round(float(last_r.get('Cash', 0.0)) + c_p * h, 2)
+            if last_r.get('Asset') != expected_asset:
+                last_r['Asset'] = expected_asset
+                target['total_asset'] = expected_asset
+                changed = True
+            target['current_cash'] = float(last_r.get('Cash', 0.0))
+            target['current_holdings'] = h
+            target['current_price'] = c_p
+        else:
+            if target.get('current_cash') != effective_capital:
+                target['current_cash'] = effective_capital
+                target['total_asset'] = effective_capital
+                changed = True
+
+        return changed
 
     def save_accounts(self, accounts: list):
         """계좌 및 거래 일지 데이터를 서버 로컬 스토리지에 안전하게 영구 저장 (자동 백업 포함)"""
@@ -103,8 +169,10 @@ class AccountManager:
             'current_cash': float(last_rec.get('Cash', initial_seed)) if last_rec else float(initial_seed),
             'current_holdings': int(last_rec.get('Hold', 0)) if last_rec else 0,
             'total_asset': float(last_rec.get('Asset', initial_seed)) if last_rec else float(initial_seed),
-            'current_price': float(last_rec.get('Close', 0.0)) if last_rec else 0.0
+            'current_price': float(last_rec.get('Close', 0.0)) if last_rec else 0.0,
+            'last_applied_adj': 0.0
         }
+        self.sync_account_balances(new_acc)
         accounts.append(new_acc)
         self.save_accounts(accounts)
         return new_acc
@@ -112,6 +180,7 @@ class AccountManager:
     def update_account_settings(self, acc_id: str, name: str = None, reserve_ratio: float = None, memo: str = None, initial_seed: float = None) -> dict:
         """
         계좌의 기본 설정(별칭, 위기준비금 비율, 메모, 초기 시드)을 수정합니다.
+        시드 변경 시 잔고 및 주문표 연동을 즉시 갱신합니다.
         """
         accounts = self.load_accounts()
         target = next((a for a in accounts if a['id'] == acc_id), None)
@@ -125,18 +194,23 @@ class AccountManager:
         if memo is not None:
             target['memo'] = memo.strip()
         if initial_seed is not None and float(initial_seed) > 0:
-            target['initial_seed'] = float(initial_seed)
-            if not target.get('trade_records'):
-                target['current_cash'] = float(initial_seed)
-                target['total_asset'] = float(initial_seed)
+            old_seed = float(target.get('initial_seed', initial_seed))
+            new_seed = float(initial_seed)
+            seed_diff = round(new_seed - old_seed, 2)
+            target['initial_seed'] = new_seed
+            if seed_diff != 0.0:
+                target['current_cash'] = round(float(target.get('current_cash', 0.0)) + seed_diff, 2)
+                target['total_asset'] = round(float(target.get('total_asset', 0.0)) + seed_diff, 2)
+                if target.get('trade_records'):
+                    last_r = target['trade_records'][-1]
+                    last_r['Cash'] = round(float(last_r.get('Cash', 0.0)) + seed_diff, 2)
+                    c_p = float(last_r.get('Close', 0.0))
+                    h = int(last_r.get('Hold', 0))
+                    last_r['Asset'] = round(float(last_r['Cash']) + c_p * h, 2)
+                    target['total_asset'] = last_r['Asset']
+                    target['current_cash'] = last_r['Cash']
 
-        if reserve_ratio is not None or initial_seed is not None:
-            cur_r = float(target.get('reserve_ratio', 0.05))
-            cur_s = float(target.get('initial_seed', 100000.0))
-            if target.get('trade_records'):
-                target['trade_records'][-1]['AK'] = round(cur_s * cur_r, 2)
-                target['trade_records'][-1]['AR'] = round(cur_s * (1.0 - cur_r), 2)
-
+        self.sync_account_balances(target)
         self.save_accounts(accounts)
         return target
 
@@ -359,6 +433,7 @@ class AccountManager:
             'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         target.setdefault('adjustments', []).append(adj_entry)
+        self.sync_account_balances(target)
         self.save_accounts(accounts)
         return True
 
@@ -646,6 +721,7 @@ class AccountManager:
         영구 보존된 trade_records가 존재하면 이를 기반으로 운용하며,
         최초 실행 시에만 과거 시뮬레이션을 통해 trade_records를 초기화합니다.
         """
+        self.sync_account_balances(acc)
         ticker = acc['ticker']
         strategy_name = acc['strategy']
         start_date = acc['start_date']
@@ -666,6 +742,7 @@ class AccountManager:
                 total_deposited += amt
                 adj_by_date[d] = adj_by_date.get(d, 0.0) + amt
 
+        effective_capital = initial_seed + total_deposited - total_withdrawn
         records = acc.get('trade_records', [])
 
         # 1. DataFrame 생성 (trade_records가 없는 신규 계좌는 깨끗한 상태 유지)
@@ -846,12 +923,8 @@ class AccountManager:
             target_yield = strat.target_yields.get(mode, 0.0275)
             div = strat.div_rounds.get(mode, 8.0)
             reserve_ratio = float(acc.get('reserve_ratio', 0.05))
-            if len(last_row) > 0 and 'AR' in last_row and 'AK' in last_row:
-                ar_val = round(float(last_row['AR']), 2)
-                ak_val = round(float(last_row['AK']), 2)
-            else:
-                ar_val = round(initial_seed * (1.0 - reserve_ratio), 2)
-                ak_val = round(initial_seed * reserve_ratio, 2)
+            ar_val = round(effective_capital * (1.0 - reserve_ratio), 2)
+            ak_val = round(effective_capital * reserve_ratio, 2)
             budget = min(ar_val / div, final_cash) if final_cash >= (ar_val / div) else final_cash
             budget = max(0.0, budget)
 
