@@ -430,18 +430,115 @@ function renderMobileRecords(container, data) {
     return;
   }
   
-  container.innerHTML = records.slice().reverse().map(r => `
-    <div style="background:rgba(15,23,42,0.6);border:1px solid var(--m-border-subtle);border-radius:8px;padding:0.7rem;margin-bottom:0.5rem;font-size:0.775rem;">
-      <div style="display:flex;justify-content:space-between;font-weight:700;color:#fff;">
-        <span>${r.Date} (종가: ${mFmt.usd(r.Close)})</span>
-        <span>자산: ${mFmt.usd(r.Asset)}</span>
-      </div>
-      <div style="color:var(--m-text-secondary);margin-top:0.25rem;">
-        매수 ${r.R || 0}주 · 매도 ${r.SellQty || 0}주 · 현금 ${mFmt.usd(r.Cash)}
-      </div>
+  let cumProfit = 0;
+  const enriched = records.map((r, i) => {
+    const isSold = Boolean(r.Sold);
+    const profit = (r.Profit !== null && r.Profit !== undefined) ? Number(r.Profit) : null;
+    if (isSold && profit !== null) cumProfit += profit;
+    const holdDays = (records.length - 1) - i;
+    const buyPrice = Number(r.BuyPrice || r.Close || 1);
+    const sellPrice = Number(r.X || 0);
+    const yieldPct = (isSold && sellPrice > 0) ? ((sellPrice - buyPrice) / buyPrice) * 100 : null;
+    const chgVal = (r.Chg !== null && r.Chg !== undefined) ? Number(r.Chg) : null;
+    return { ...r, isSold, profit, cumProfit: isSold ? cumProfit : null, yieldPct, holdDays, chgVal };
+  });
+
+  const reversed = enriched.slice().reverse();
+
+  container.innerHTML = `
+    <div class="jj-journal-wrapper">
+      <table class="jj-journal-table">
+        <thead>
+          <tr>
+            <th class="jj-th-grp1">거래일자</th>
+            <th class="jj-th-grp1">종가</th>
+            <th class="jj-th-grp1">변동률</th>
+            <th class="jj-th-grp1">모드</th>
+            <th class="jj-th-grp2">매수량</th>
+            <th class="jj-th-grp2">목표가</th>
+            <th class="jj-th-grp3">매도일</th>
+            <th class="jj-th-grp3">매도가</th>
+            <th class="jj-th-grp4">손익금액</th>
+            <th class="jj-th-grp4">손익률</th>
+            <th class="jj-th-grp4">누적손익</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${reversed.map(r => {
+            const dateParts = String(r.Date).substring(0, 10).split('-');
+            let dateFmt = r.Date;
+            if (dateParts.length === 3) {
+              const dt = new Date(parseInt(dateParts[0]), parseInt(dateParts[1])-1, parseInt(dateParts[2]));
+              const days = ['일','월','화','수','목','금','토'];
+              dateFmt = `${dateParts[1]}.${dateParts[2]}.(${days[dt.getDay()]})`;
+            }
+
+            let chgHtml = '<span style="color:#64748b;">-</span>';
+            if (r.chgVal !== null && !isNaN(r.chgVal) && Math.abs(r.chgVal) > 0.00001) {
+              const pctStr = (r.chgVal * 100).toFixed(2);
+              chgHtml = r.chgVal > 0 
+                ? `<span style="color:#f87171;font-weight:700;">+${pctStr}%</span>` 
+                : `<span style="color:#60a5fa;font-weight:700;">${pctStr}%</span>`;
+            }
+
+            const mStr = String(r.Mode || 'Normal').toLowerCase();
+            const modeBadge = mStr === 'safe' 
+              ? '<span class="badge-mode-safe-pill">Safe</span>' 
+              : (mStr.includes('risk') ? '<span class="badge-mode-risk-pill">Risk-off</span>' : '<span class="badge-mode-normal-pill">Normal</span>');
+
+            const buyQty = Number(r.BuyQty || r.R || 0);
+            const buyHtml = buyQty > 0 ? `<span style="color:#00e699;font-weight:700;">${mFmt.num(buyQty)}주</span>` : '<span style="color:#64748b;">-</span>';
+            const targetU = r.U ? mFmt.usd(r.U) : mFmt.usd(r.Close * 1.0275);
+
+            let sellDateHtml = `<span class="badge-holding-pill">보유중(${r.holdDays}d)</span>`;
+            let sellPriceHtml = '<span style="color:#64748b;">-</span>';
+            if (r.isSold) {
+              const wParts = String(r.W || r.Date).substring(0, 10).split('-');
+              let wFmt = r.W || r.Date;
+              if (wParts.length === 3) {
+                const wdt = new Date(parseInt(wParts[0]), parseInt(wParts[1])-1, parseInt(wParts[2]));
+                const days = ['일','월','화','수','목','금','토'];
+                wFmt = `${wParts[1]}.${wParts[2]}.(${days[wdt.getDay()]})`;
+              }
+              sellDateHtml = `<span>${wFmt}</span>`;
+              sellPriceHtml = `<span>${mFmt.usd(r.X || 0)}</span>`;
+            }
+
+            let profitHtml = '<span style="color:#64748b;">-</span>';
+            let yieldHtml = '<span style="color:#64748b;">-</span>';
+            let cumProfitHtml = '<span style="color:#64748b;">-</span>';
+            if (r.isSold && r.profit !== null) {
+              const pRound = Math.round(r.profit);
+              profitHtml = pRound >= 0 ? `<span style="color:#00e699;font-weight:700;">+${pRound.toLocaleString()}$</span>` : `<span style="color:#ef4444;font-weight:700;">-${Math.abs(pRound).toLocaleString()}$</span>`;
+              if (r.yieldPct !== null) yieldHtml = r.yieldPct >= 0 ? `<span style="color:#00e699;font-weight:700;">+${r.yieldPct.toFixed(1)}%</span>` : `<span style="color:#ef4444;font-weight:700;">${r.yieldPct.toFixed(1)}%</span>`;
+              if (r.cumProfit !== null) {
+                const cRound = Math.round(r.cumProfit);
+                cumProfitHtml = cRound >= 0 ? `<span style="color:#00e699;font-weight:700;">+${cRound.toLocaleString()}$</span>` : `<span style="color:#ef4444;font-weight:700;">-${Math.abs(cRound).toLocaleString()}$</span>`;
+              }
+            }
+
+            return `
+              <tr>
+                <td><strong>${dateFmt}</strong></td>
+                <td><strong>${mFmt.usd(r.Close)}</strong></td>
+                <td>${chgHtml}</td>
+                <td>${modeBadge}</td>
+                <td>${buyHtml}</td>
+                <td>${targetU}</td>
+                <td>${sellDateHtml}</td>
+                <td>${sellPriceHtml}</td>
+                <td>${profitHtml}</td>
+                <td>${yieldHtml}</td>
+                <td>${cumProfitHtml}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
     </div>
-  `).join('');
+  `;
 }
+
 
 function renderMobileAdjustments(container, data) {
   const adjs = data.adjustments || [];

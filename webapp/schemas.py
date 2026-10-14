@@ -105,4 +105,13 @@ class SchedulerConfigRequest(BaseModel):
     settle_time: str = Field(default="05:10", example="05:10")
 
 
+class EditTradeRecordRequest(BaseModel):
+    date: str
+    close_price: Optional[float] = None
+    buy_qty: Optional[int] = None
+    sell_qty: Optional[int] = None
+    mode: Optional[str] = None
+    memo: Optional[str] = None
+
+
 

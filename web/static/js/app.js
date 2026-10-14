@@ -377,31 +377,8 @@ function switchTab(tabId) {
 const WATCH_TICKERS = ['SOXL', 'TQQQ', 'QLD', 'UPRO', 'NVDA', 'TSLA'];
 
 async function initTickerRibbon() {
-  const container = document.getElementById('ticker-ribbon');
-  if (!container) return;
-
-  container.innerHTML = WATCH_TICKERS.map(sym => `
-    <div class="ticker-chip" onclick="quickFillBacktest('${sym}')" id="chip-${sym}">
-      <span class="sym">${sym}</span>
-      <span class="price" id="price-${sym}">조회중...</span>
-      <span class="change" id="chg-${sym}"></span>
-    </div>
-  `).join('');
-
-  for (const sym of WATCH_TICKERS) {
-    try {
-      const res = await fetch(`/api/market/quote/${sym}`);
-      const data = await res.json();
-      if (data && data.close > 0) {
-        document.getElementById(`price-${sym}`).textContent = fmt.usd(data.close);
-        const chgEl = document.getElementById(`chg-${sym}`);
-        chgEl.textContent = fmt.pct(data.change_pct);
-        chgEl.className = `change ${data.change_pct >= 0 ? 'up' : 'down'}`;
-      }
-    } catch (e) {
-      console.warn(`시세 조회 실패: ${sym}`, e);
-    }
-  }
+  // Removed top ticker bar per user request
+  return;
 }
 
 function quickFillBacktest(sym) {
@@ -937,45 +914,160 @@ function renderDetailSubTabs(data) {
     }
   }
 
-  // 3. 매매 일지 서브탭
+  // 3. 매매 일지 서브탭 (스크린샷 그룹 색상 및 12개 컬럼 완벽 일치)
   const recordsPane = document.getElementById('subtab-records');
   if (recordsPane) {
     if (records.length > 0) {
-      const reversed = [...records].reverse();
+      let cumProfit = 0;
+      const enrichedRecords = records.map((r, i) => {
+        const isSold = Boolean(r.Sold);
+        const profit = (r.Profit !== null && r.Profit !== undefined) ? Number(r.Profit) : null;
+        if (isSold && profit !== null) {
+          cumProfit += profit;
+        }
+
+        // 보유일수 계산 (미매도 슬롯의 경우 최신 데이터 기준 경과 거래일)
+        const holdDays = (records.length - 1) - i;
+
+        // 수익률 계산
+        const buyPrice = Number(r.BuyPrice || r.Close || 1);
+        const sellPrice = Number(r.X || 0);
+        let yieldPct = null;
+        if (isSold && sellPrice > 0) {
+          yieldPct = ((sellPrice - buyPrice) / buyPrice) * 100;
+        }
+
+        const chgVal = (r.Chg !== null && r.Chg !== undefined) ? Number(r.Chg) : null;
+
+        return {
+          ...r,
+          isSold,
+          profit,
+          cumProfit: isSold ? cumProfit : null,
+          yieldPct,
+          holdDays,
+          chgVal
+        };
+      });
+
+      const reversed = [...enrichedRecords].reverse();
+
       recordsPane.innerHTML = `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+          <div style="font-size:0.8rem;color:var(--text-secondary);">
+            총 <strong>${records.length}</strong>건의 매매일지 (최신순 정렬)
+          </div>
           <button class="btn btn-danger btn-sm" onclick="undoLastTradeRecord('${acc.id}')">↩ 마지막 기록 취소 (Undo)</button>
         </div>
-        <table class="custom-table">
-          <thead>
-            <tr>
-              <th>날짜</th>
-              <th>종가</th>
-              <th>매수량</th>
-              <th>매도량</th>
-              <th>실현손익</th>
-              <th>예수금</th>
-              <th>보유수량</th>
-              <th>총자산</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${reversed.map(r => `
+        <div class="jj-journal-wrapper">
+          <table class="jj-journal-table">
+            <thead>
               <tr>
-                <td>${r.Date ? String(r.Date).substring(0, 10) : ''}</td>
-                <td>${fmt.usd(r.Close)}</td>
-                <td>${r.R ? `${fmt.num(r.R)}주` : '-'}</td>
-                <td>${r.SellQty ? `${fmt.num(r.SellQty)}주` : '-'}</td>
-                <td style="${r.Profit > 0 ? 'color:var(--profit-green);font-weight:700;' : (r.Profit < 0 ? 'color:var(--loss-red);font-weight:700;' : '')}">
-                  ${r.Profit !== null && r.Profit !== undefined ? fmt.usd(r.Profit) : '-'}
-                </td>
-                <td>${fmt.usd(r.Cash)}</td>
-                <td>${fmt.num(r.Hold)}주</td>
-                <td><strong>${fmt.usd(r.Asset)}</strong></td>
+                <th class="jj-th-grp1">거래일자</th>
+                <th class="jj-th-grp1">종가</th>
+                <th class="jj-th-grp1">변동률</th>
+                <th class="jj-th-grp1">모드</th>
+                <th class="jj-th-grp2">매수량</th>
+                <th class="jj-th-grp2">목표가</th>
+                <th class="jj-th-grp3">매도일</th>
+                <th class="jj-th-grp3">매도가</th>
+                <th class="jj-th-grp4">손익금액</th>
+                <th class="jj-th-grp4">손익률</th>
+                <th class="jj-th-grp4">누적손익</th>
+                <th class="jj-th-grp5">수정</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${reversed.map(r => {
+                const dateFmt = formatTradeDate(r.Date);
+                const closeFmt = fmt.usd(r.Close);
+
+                // 변동률
+                let chgHtml = '<span style="color:#64748b;">-</span>';
+                if (r.chgVal !== null && !isNaN(r.chgVal) && Math.abs(r.chgVal) > 0.00001) {
+                  const pctStr = (r.chgVal * 100).toFixed(2);
+                  if (r.chgVal > 0) {
+                    chgHtml = `<span style="color:#f87171;font-weight:700;">+${pctStr}%</span>`;
+                  } else {
+                    chgHtml = `<span style="color:#60a5fa;font-weight:700;">${pctStr}%</span>`;
+                  }
+                }
+
+                // 모드
+                const modeStr = String(r.Mode || 'Normal').toLowerCase();
+                let modeBadge = '<span class="badge-mode-normal-pill">Normal</span>';
+                if (modeStr === 'safe') {
+                  modeBadge = '<span class="badge-mode-safe-pill">Safe</span>';
+                } else if (modeStr === 'riskoff' || modeStr === 'risk-off') {
+                  modeBadge = '<span class="badge-mode-risk-pill">Risk-off</span>';
+                }
+
+                // 매수량 & 목표가
+                const buyQty = Number(r.BuyQty || r.R || 0);
+                const buyQtyHtml = buyQty > 0 ? `<span style="color:#00e699;font-weight:700;">${fmt.num(buyQty)}주</span>` : '<span style="color:#64748b;">-</span>';
+                const targetU = r.U ? fmt.usd(r.U) : fmt.usd(r.Close * 1.0275);
+
+                // 매도일 & 매도가
+                let sellDateHtml = `<span class="badge-holding-pill">보유중(${r.holdDays}d)</span>`;
+                let sellPriceHtml = '<span style="color:#64748b;">-</span>';
+                if (r.isSold) {
+                  sellDateHtml = `<span>${formatTradeDate(r.W || r.Date)}</span>`;
+                  sellPriceHtml = `<span>${fmt.usd(r.X || r.SellPrice || 0)}</span>`;
+                }
+
+                // 손익금액, 손익률, 누적손익
+                let profitHtml = '<span style="color:#64748b;">-</span>';
+                let yieldHtml = '<span style="color:#64748b;">-</span>';
+                let cumProfitHtml = '<span style="color:#64748b;">-</span>';
+                if (r.isSold && r.profit !== null) {
+                  const pRound = Math.round(r.profit);
+                  profitHtml = pRound >= 0 
+                    ? `<span style="color:#00e699;font-weight:700;">+${pRound.toLocaleString()}$</span>`
+                    : `<span style="color:#ef4444;font-weight:700;">-${Math.abs(pRound).toLocaleString()}$</span>`;
+                  
+                  if (r.yieldPct !== null) {
+                    yieldHtml = r.yieldPct >= 0
+                      ? `<span style="color:#00e699;font-weight:700;">+${r.yieldPct.toFixed(1)}%</span>`
+                      : `<span style="color:#ef4444;font-weight:700;">${r.yieldPct.toFixed(1)}%</span>`;
+                  }
+
+                  if (r.cumProfit !== null) {
+                    const cRound = Math.round(r.cumProfit);
+                    cumProfitHtml = cRound >= 0
+                      ? `<span style="color:#00e699;font-weight:700;">+${cRound.toLocaleString()}$</span>`
+                      : `<span style="color:#ef4444;font-weight:700;">-${Math.abs(cRound).toLocaleString()}$</span>`;
+                  }
+                }
+
+                const safeMemo = (r.Memo || '').replace(/'/g, "\\'");
+                const editIconBtn = `
+                  <button class="btn-table-edit" onclick="openEditTradeModal('${acc.id}', '${r.Date}', ${r.Close || 0}, ${buyQty}, ${r.SellQty || 0}, '${r.Mode || 'Normal'}', '${safeMemo}')" title="기록 수정">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                    </svg>
+                  </button>
+                `;
+
+                return `
+                  <tr>
+                    <td><strong>${dateFmt}</strong></td>
+                    <td><strong>${closeFmt}</strong></td>
+                    <td>${chgHtml}</td>
+                    <td>${modeBadge}</td>
+                    <td>${buyQtyHtml}</td>
+                    <td>${targetU}</td>
+                    <td>${sellDateHtml}</td>
+                    <td>${sellPriceHtml}</td>
+                    <td>${profitHtml}</td>
+                    <td>${yieldHtml}</td>
+                    <td>${cumProfitHtml}</td>
+                    <td style="text-align:center;">${editIconBtn}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
       `;
     } else {
       recordsPane.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);">아직 기록된 일별 매매일지가 없습니다.</div>';
@@ -1085,6 +1177,84 @@ async function submitSettlement() {
     }
   } catch (e) {
     showToast('정산 기록 중 오류가 발생했습니다.', 'error');
+  }
+}
+
+// -------------------------------------------------------------------
+// 매매 일지 날짜 포맷 및 수정 모달
+// -------------------------------------------------------------------
+function formatTradeDate(dateStr) {
+  if (!dateStr) return '-';
+  const clean = String(dateStr).substring(0, 10);
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    const d = parseInt(parts[2], 10);
+    const dt = new Date(y, m - 1, d);
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+    const dayName = days[dt.getDay()];
+    const mm = String(m).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    return `${mm}.${dd}.(${dayName})`;
+  }
+  return dateStr;
+}
+
+function openEditTradeModal(accId, dateStr, close, buyQty, sellQty, mode, memo) {
+  const modal = document.getElementById('editTradeModal');
+  if (!modal) return;
+  document.getElementById('edit-trade-acc-id').value = accId;
+  document.getElementById('edit-trade-date').value = dateStr;
+  document.getElementById('edit-trade-date-display').value = `${dateStr} [${formatTradeDate(dateStr)}]`;
+  document.getElementById('edit-trade-close').value = close || '';
+  document.getElementById('edit-trade-buy-qty').value = buyQty || 0;
+  document.getElementById('edit-trade-sell-qty').value = sellQty || 0;
+  const mLower = (mode || '').toLowerCase();
+  document.getElementById('edit-trade-mode').value = mLower === 'safe' ? 'Safe' : (mLower.includes('risk') ? 'Riskoff' : 'Normal');
+  document.getElementById('edit-trade-memo').value = memo || '';
+
+  modal.classList.add('active');
+}
+
+async function submitEditTradeRecord() {
+  const accId = document.getElementById('edit-trade-acc-id').value;
+  const dateStr = document.getElementById('edit-trade-date').value;
+  const closePrice = parseFloat(document.getElementById('edit-trade-close').value);
+  const buyQty = parseInt(document.getElementById('edit-trade-buy-qty').value) || 0;
+  const sellQty = parseInt(document.getElementById('edit-trade-sell-qty').value) || 0;
+  const mode = document.getElementById('edit-trade-mode').value;
+  const memo = document.getElementById('edit-trade-memo').value;
+
+  if (isNaN(closePrice) || closePrice <= 0) {
+    showToast('종가를 올바르게 입력해주세요.', 'error');
+    return;
+  }
+
+  try {
+    const res = await authFetch(`/api/accounts/${accId}/trade-records/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: dateStr,
+        close_price: closePrice,
+        buy_qty: buyQty,
+        sell_qty: sellQty,
+        mode: mode,
+        memo: memo
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('매매 기록이 성공적으로 수정되었습니다.');
+      closeModal('editTradeModal');
+      await openAccountDetailModal(accId);
+      loadAccounts(true);
+    } else {
+      showToast(data.detail || '수정에 실패했습니다.', 'error');
+    }
+  } catch (e) {
+    showToast('수정 요청 중 오류가 발생했습니다.', 'error');
   }
 }
 

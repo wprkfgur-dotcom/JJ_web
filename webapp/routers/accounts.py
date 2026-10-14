@@ -12,6 +12,7 @@ from ..schemas import (
     SettlementRequest,
     UpdateAccountRequest,
     AccountBrokerConfigRequest,
+    EditTradeRecordRequest,
 )
 from ..utils import current_username, get_owned_account, sanitize_for_json
 
@@ -155,6 +156,11 @@ async def get_account_detail(acc_id: str, request: Request):
     trade_records = target.get("trade_records", [])
     acc_copy = dict(target)
     acc_copy["mode"] = details_clean.get("mode", "Normal")
+    if "auto_trade" in acc_copy and isinstance(acc_copy["auto_trade"], dict):
+        sanitized_at = dict(acc_copy["auto_trade"])
+        sanitized_at.pop("app_key_enc", None)
+        sanitized_at.pop("app_secret_enc", None)
+        acc_copy["auto_trade"] = sanitized_at
     return sanitize_for_json({
         "account": acc_copy,
         "details": details_clean,
@@ -296,6 +302,30 @@ async def undo_last_trade(acc_id: str, request: Request):
     if not am.delete_last_trade_record(acc_id):
         raise HTTPException(status_code=400, detail="Cannot undo last record")
     return {"success": True}
+
+
+@router.post("/{acc_id}/trade-records/edit")
+async def edit_account_trade_record(acc_id: str, req: EditTradeRecordRequest, request: Request):
+    """매매일지 특정 거래일 기록 수정 (소유자 검증)"""
+    get_owned_account(acc_id, request, "본인의 계좌만 수정할 수 있습니다.")
+    fields = {}
+    if req.close_price is not None:
+        fields["Close"] = float(req.close_price)
+        fields["BuyPrice"] = float(req.close_price)
+    if req.buy_qty is not None:
+        fields["BuyQty"] = int(req.buy_qty)
+        fields["R"] = int(req.buy_qty)
+    if req.sell_qty is not None:
+        fields["SellQty"] = int(req.sell_qty)
+    if req.mode is not None:
+        fields["Mode"] = req.mode.strip().capitalize()
+    if req.memo is not None:
+        fields["Memo"] = req.memo
+
+    ok = am.update_trade_record(acc_id, req.date.strip(), fields)
+    if not ok:
+        raise HTTPException(status_code=400, detail="기록 수정에 실패했거나 거래일을 찾을 수 없습니다.")
+    return {"success": True, "message": "매매 기록이 성공적으로 수정되었습니다."}
 
 
 @router.get("/{acc_id}/broker")

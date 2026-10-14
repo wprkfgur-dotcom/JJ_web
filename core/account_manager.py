@@ -738,6 +738,8 @@ class AccountManager:
         self.save_accounts(accounts)
         return True
 
+    delete_last_trade_record = delete_last_day_record
+
     def update_trade_record(self, acc_id: str, date_str: str, updated_fields: dict) -> bool:
         """
         특정 거래일의 기록을 수정하고 이후 누적 잔고(Cash, Hold, Asset)를 재계산합니다.

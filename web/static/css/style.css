@@ -591,6 +591,116 @@ main {
   font-weight: 700;
 }
 
+/* =====================================================================
+   JJ Trade Journal Table Styles (Group Header Colors & Pill Badges)
+   ===================================================================== */
+.jj-journal-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #080f20;
+}
+
+.jj-journal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.835rem;
+  text-align: left;
+  background: #080f20;
+}
+
+.jj-journal-table th {
+  padding: 0.85rem 0.75rem;
+  font-weight: 700;
+  font-size: 0.825rem;
+  letter-spacing: -0.01em;
+  background: #0a1329;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+/* 4 Distinct Group Header Colors */
+.jj-th-grp1 { color: #00e699 !important; } /* 거래일자, 종가, 변동률, 모드 (Mint Green) */
+.jj-th-grp2 { color: #ff5388 !important; } /* 매수량, 목표가 (Rose Pink) */
+.jj-th-grp3 { color: #38bdf8 !important; } /* 매도일, 매도가 (Sky Blue) */
+.jj-th-grp4 { color: #fbbf24 !important; } /* 손익금액, 손익률, 누적손익 (Gold/Amber) */
+.jj-th-grp5 { color: #94a3b8 !important; text-align: center; } /* 수정 (Slate/Silver) */
+
+.jj-journal-table td {
+  padding: 0.75rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  font-size: 0.835rem;
+  vertical-align: middle;
+  color: #e2e8f0;
+}
+
+.jj-journal-table tr:hover td {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.badge-mode-safe-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge-mode-normal-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge-mode-risk-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge-holding-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  background: rgba(217, 119, 6, 0.25);
+  color: #fbbf24;
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.btn-table-edit {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  color: #38bdf8;
+}
+
+.btn-table-edit:hover {
+  background: rgba(56, 189, 248, 0.2);
+  transform: scale(1.15);
+}
+
 /* Backtest Controls */
 .backtest-panel {
   background: var(--bg-card);
