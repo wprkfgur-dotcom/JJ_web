@@ -46,8 +46,9 @@ class BacktestRequest(BaseModel):
     capital: float = Field(default=100000.0)
     start_date: str = Field(default="2023-01-03")
     end_date: str = Field(default="2026-10-09")
-    strategies: List[str] = Field(default=["종종이 기본전략", "무한매수법 v4.0", "SOXL 단순보유(B&H)"])
+    strategies: Optional[List[str]] = Field(default=None)
     use_adj_close: bool = Field(default=True)
+    jongjong_params: Optional[dict] = Field(default=None)
 
 
 class RegisterRequest(BaseModel):

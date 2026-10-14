@@ -876,24 +876,60 @@ function mQuickFillTicker(t) {
   document.getElementById('m-bt-ticker').value = t;
 }
 
+function mResetBtJongJongParams() {
+  if (document.getElementById('m-bt-jj-hold-days')) document.getElementById('m-bt-jj-hold-days').value = '10';
+  if (document.getElementById('m-bt-jj-reserve-ratio')) document.getElementById('m-bt-jj-reserve-ratio').value = '5.00';
+  if (document.getElementById('m-bt-jj-fee-rate')) document.getElementById('m-bt-jj-fee-rate').value = '0.000';
+  if (document.getElementById('m-bt-jj-normal-yield')) document.getElementById('m-bt-jj-normal-yield').value = '2.75';
+  if (document.getElementById('m-bt-jj-normal-splits')) document.getElementById('m-bt-jj-normal-splits').value = '8';
+  if (document.getElementById('m-bt-jj-safe-yield')) document.getElementById('m-bt-jj-safe-yield').value = '0.25';
+  if (document.getElementById('m-bt-jj-safe-splits')) document.getElementById('m-bt-jj-safe-splits').value = '7';
+  if (document.getElementById('m-bt-jj-riskoff-yield')) document.getElementById('m-bt-jj-riskoff-yield').value = '0.70';
+  if (document.getElementById('m-bt-jj-riskoff-splits')) document.getElementById('m-bt-jj-riskoff-splits').value = '5';
+  mToast('종종이 인자가 초기화되었습니다.');
+}
+
 async function mRunBacktest() {
   const ticker = document.getElementById('m-bt-ticker').value.trim().toUpperCase();
   const capital = parseFloat(document.getElementById('m-bt-capital').value) || 100000;
   const start_date = document.getElementById('m-bt-start').value;
   const end_date = document.getElementById('m-bt-end').value;
-  const use_adj_close = document.getElementById('m-bt-adj-close').checked;
+  const use_adj_close = document.getElementById('m-bt-adj-close') ? document.getElementById('m-bt-adj-close').checked : true;
   
-  const strategies = [];
-  if (document.getElementById('m-strat-jj').checked) strategies.push('종종이 기본전략');
-  if (document.getElementById('m-strat-inf').checked) strategies.push('무한매수법 v4.0');
-  if (document.getElementById('m-strat-vr').checked) strategies.push('VR 5.0 (밸류리밸런싱)');
-  if (document.getElementById('m-strat-puddle').checked) strategies.push('웅덩이 매매법');
-  if (document.getElementById('m-strat-bnh').checked) strategies.push(`${ticker} 단순보유(B&H)`);
-  
-  if (strategies.length === 0) {
-    mToast('최소 1개 이상의 전략을 선택하세요.', true);
-    return;
-  }
+  // 종종이 맞춤 인자
+  const holdDays = parseInt(document.getElementById('m-bt-jj-hold-days')?.value, 10) || 10;
+  const reserveRatio = (parseFloat(document.getElementById('m-bt-jj-reserve-ratio')?.value) || 5.0) / 100.0;
+  const feeRate = (parseFloat(document.getElementById('m-bt-jj-fee-rate')?.value) || 0.0) / 100.0;
+  const normalYield = (parseFloat(document.getElementById('m-bt-jj-normal-yield')?.value) || 2.75) / 100.0;
+  const normalSplits = parseFloat(document.getElementById('m-bt-jj-normal-splits')?.value) || 8.0;
+  const safeYield = (parseFloat(document.getElementById('m-bt-jj-safe-yield')?.value) || 0.25) / 100.0;
+  const safeSplits = parseFloat(document.getElementById('m-bt-jj-safe-splits')?.value) || 7.0;
+  const riskoffYield = (parseFloat(document.getElementById('m-bt-jj-riskoff-yield')?.value) || 0.70) / 100.0;
+  const riskoffSplits = parseFloat(document.getElementById('m-bt-jj-riskoff-splits')?.value) || 5.0;
+
+  const jongjongParams = {
+    max_hold_days: holdDays,
+    reserve_ratio: reserveRatio,
+    fee_rate: feeRate,
+    target_yields: {
+      'Normal': normalYield,
+      'Safe': safeYield,
+      'Riskoff': riskoffYield
+    },
+    div_rounds: {
+      'Normal': normalSplits,
+      'Safe': safeSplits,
+      'Riskoff': riskoffSplits
+    }
+  };
+
+  const strategies = [
+    '종종이 전략',
+    '무한매수법 v4.0',
+    'VR 5.0 (밸류리밸런싱)',
+    '웅덩이 매매법',
+    `${ticker} 단순보유(B&H)`
+  ];
   
   const btn = document.getElementById('m-btn-run-bt');
   btn.disabled = true;
@@ -904,7 +940,13 @@ async function mRunBacktest() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ticker, capital, start_date, end_date, strategies, use_adj_close
+        ticker,
+        capital,
+        start_date,
+        end_date,
+        strategies,
+        use_adj_close,
+        jongjong_params: jongjongParams
       })
     });
     if (!res.ok) throw new Error('백테스트 실패');

@@ -19,6 +19,7 @@ def run_strategies(
     start_date: str,
     end_date: str,
     strategy_names: Sequence[str],
+    jongjong_params: Optional[dict] = None,
     on_progress: Optional[Callable[[str], None]] = None,
 ) -> List[Dict]:
     """선택된 전략들을 순서대로 실행하고 결과 목록을 반환합니다.
@@ -30,7 +31,7 @@ def run_strategies(
     for name in strategy_names:
         if on_progress:
             on_progress(name)
-        strat = create_backtest_strategy(name, ticker, capital)
+        strat = create_backtest_strategy(name, ticker, capital, jongjong_params=jongjong_params)
         df_s = strat.run(df_market, start_date, end_date)
         results.append({
             'name': name,

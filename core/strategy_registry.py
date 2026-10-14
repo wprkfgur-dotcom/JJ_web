@@ -91,15 +91,41 @@ def bnh_display_name(ticker: str) -> str:
     return f"{ticker} 단순보유(B&H)"
 
 
-def create_backtest_strategy(name: str, ticker: str, capital: float):
-    """백테스트용 전략 인스턴스를 생성합니다 (기존 백테스트 파라미터 유지)."""
+def create_backtest_strategy(name: str, ticker: str, capital: float, jongjong_params: Optional[dict] = None):
+    """백테스트용 전략 인스턴스를 생성합니다 (종종이 맞춤 파라미터 지원)."""
     kind = classify_strategy(name)
     if kind == JONGJONG:
-        return JongJongStrategy(initial_capital=capital, reserve_ratio=0.05)
+        if jongjong_params:
+            try:
+                reserve_ratio = float(jongjong_params.get("reserve_ratio", 0.05))
+                fee_rate = float(jongjong_params.get("fee_rate", 0.0005))
+                max_hold_days = int(jongjong_params.get("max_hold_days", 10))
+                div_rounds = jongjong_params.get("div_rounds") or {
+                    'Normal': float(jongjong_params.get("normal_splits", 8.0)),
+                    'Safe': float(jongjong_params.get("safe_splits", 7.0)),
+                    'Riskoff': float(jongjong_params.get("riskoff_splits", 5.0)),
+                }
+                target_yields = jongjong_params.get("target_yields") or {
+                    'Normal': float(jongjong_params.get("normal_target_yield", 0.0275)),
+                    'Safe': float(jongjong_params.get("safe_target_yield", 0.0025)),
+                    'Riskoff': float(jongjong_params.get("riskoff_target_yield", 0.0070)),
+                }
+                return JongJongStrategy(
+                    initial_capital=capital,
+                    reserve_ratio=reserve_ratio,
+                    fee_rate=fee_rate,
+                    max_hold_days=max_hold_days,
+                    div_rounds=div_rounds,
+                    target_yields=target_yields,
+                    name=name if "종종이" in name else "종종이 전략",
+                )
+            except Exception as e:
+                print(f"[create_backtest_strategy] Error configuring JongJongStrategy: {e}")
+        return JongJongStrategy(initial_capital=capital, reserve_ratio=0.05, name="종종이 기본전략")
     if kind == INFINITE:
         return InfiniteBuyingV4Strategy(ticker=ticker, initial_capital=capital, divisions=40)
     if kind == VR:
         return ValueRebalancingV5Strategy(ticker=ticker, initial_capital=capital, g_value=10.0, band_pct=0.15)
     if kind == PUDDLE:
         return PuddleStrategy(name="웅덩이 매매법", ticker=ticker, initial_capital=capital)
-    return BuyAndHoldStrategy(name=f"{ticker} 단순보유", initial_capital=capital)
+    return BuyAndHoldStrategy(name=bnh_display_name(ticker), initial_capital=capital)

@@ -1963,6 +1963,19 @@ function setBacktestPeriodByYears(years) {
   document.getElementById('bt-end-date').value = formatLocalDate(now);
 }
 
+function resetBtJongJongParams() {
+  if (document.getElementById('bt-jj-hold-days')) document.getElementById('bt-jj-hold-days').value = '10';
+  if (document.getElementById('bt-jj-reserve-ratio')) document.getElementById('bt-jj-reserve-ratio').value = '5.00';
+  if (document.getElementById('bt-jj-fee-rate')) document.getElementById('bt-jj-fee-rate').value = '0.000';
+  if (document.getElementById('bt-jj-normal-yield')) document.getElementById('bt-jj-normal-yield').value = '2.75';
+  if (document.getElementById('bt-jj-normal-splits')) document.getElementById('bt-jj-normal-splits').value = '8';
+  if (document.getElementById('bt-jj-safe-yield')) document.getElementById('bt-jj-safe-yield').value = '0.25';
+  if (document.getElementById('bt-jj-safe-splits')) document.getElementById('bt-jj-safe-splits').value = '7';
+  if (document.getElementById('bt-jj-riskoff-yield')) document.getElementById('bt-jj-riskoff-yield').value = '0.70';
+  if (document.getElementById('bt-jj-riskoff-splits')) document.getElementById('bt-jj-riskoff-splits').value = '5';
+  showToast('종종이 전략 인자가 기본값으로 초기화되었습니다.');
+}
+
 async function runBacktest() {
   const ticker = document.getElementById('bt-ticker').value.trim().toUpperCase();
   const capital = parseFloat(document.getElementById('bt-capital').value) || 200000;
@@ -1970,17 +1983,44 @@ async function runBacktest() {
   const endDate = document.getElementById('bt-end-date').value;
   const useAdjClose = document.getElementById('bt-adj-close') ? document.getElementById('bt-adj-close').checked : true;
 
-  const strategies = [];
-  if (document.getElementById('strat-jj').checked) strategies.push('종종이 기본전략');
-  if (document.getElementById('strat-inf').checked) strategies.push('무한매수법 v4.0');
-  if (document.getElementById('strat-vr').checked) strategies.push('VR 5.0 (밸류리밸런싱)');
-  if (document.getElementById('strat-puddle')?.checked) strategies.push('웅덩이 매매법');
-  if (document.getElementById('strat-bnh').checked) strategies.push(`${ticker} 단순보유(B&H)`);
+  // 종종이 전략 맞춤 설정 인자 수집
+  const holdDays = parseInt(document.getElementById('bt-jj-hold-days')?.value, 10) || 10;
+  const reserveRatio = (parseFloat(document.getElementById('bt-jj-reserve-ratio')?.value) || 5.0) / 100.0;
+  const feeRate = (parseFloat(document.getElementById('bt-jj-fee-rate')?.value) || 0.0) / 100.0;
 
-  if (strategies.length === 0) {
-    showToast('비교할 전략을 최소 1개 이상 선택해주세요.', 'error');
-    return;
-  }
+  const normalYield = (parseFloat(document.getElementById('bt-jj-normal-yield')?.value) || 2.75) / 100.0;
+  const normalSplits = parseFloat(document.getElementById('bt-jj-normal-splits')?.value) || 8.0;
+
+  const safeYield = (parseFloat(document.getElementById('bt-jj-safe-yield')?.value) || 0.25) / 100.0;
+  const safeSplits = parseFloat(document.getElementById('bt-jj-safe-splits')?.value) || 7.0;
+
+  const riskoffYield = (parseFloat(document.getElementById('bt-jj-riskoff-yield')?.value) || 0.70) / 100.0;
+  const riskoffSplits = parseFloat(document.getElementById('bt-jj-riskoff-splits')?.value) || 5.0;
+
+  const jongjongParams = {
+    max_hold_days: holdDays,
+    reserve_ratio: reserveRatio,
+    fee_rate: feeRate,
+    target_yields: {
+      'Normal': normalYield,
+      'Safe': safeYield,
+      'Riskoff': riskoffYield
+    },
+    div_rounds: {
+      'Normal': normalSplits,
+      'Safe': safeSplits,
+      'Riskoff': riskoffSplits
+    }
+  };
+
+  // 기본 비교군 4종(무한매수, VR5.0, 웅덩이, 단순보유)과 종종이 전략 항상 자동 시뮬레이션
+  const strategies = [
+    '종종이 전략',
+    '무한매수법 v4.0',
+    'VR 5.0 (밸류리밸런싱)',
+    '웅덩이 매매법',
+    `${ticker} 단순보유(B&H)`
+  ];
 
   const runBtn = document.getElementById('btn-run-backtest');
   const loader = document.getElementById('bt-loader');
@@ -1992,11 +2032,13 @@ async function runBacktest() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ticker, capital,
+        ticker,
+        capital,
         start_date: startDate,
         end_date: endDate,
         strategies,
-        use_adj_close: useAdjClose
+        use_adj_close: useAdjClose,
+        jongjong_params: jongjongParams
       })
     });
 

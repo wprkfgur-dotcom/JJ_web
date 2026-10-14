@@ -401,31 +401,168 @@
           </div>
         </div>
 
-        <!-- Strategy Checkboxes -->
-        <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:0.5rem;">
-          비교 분석할 전략 선택
-        </label>
-        <div class="strategy-checkboxes">
-          <label class="checkbox-label">
-            <input type="checkbox" id="strat-jj" checked>
-            <span><strong>⭐ 종종이 3단계 LOC 전략</strong> (위기준비금 AK 5%)</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="strat-inf" checked>
-            <span>무한매수법 v4.0 (40분할)</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="strat-vr" checked>
-            <span>VR 5.0 (밸류리밸런싱)</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="strat-puddle" checked>
-            <span>🌊 <strong>웅덩이 매매법</strong> (이평선 & RSI 바닥 분할매수)</span>
-          </label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="strat-bnh" checked>
-            <span>단순보유 (Buy & Hold 벤치마크)</span>
-          </label>
+        <!-- 종종이 전략 변수 설정창 (JongJong Strategy Parameters) -->
+        <div class="bt-jj-settings-card" style="background: rgba(15, 23, 42, 0.45); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 0.65rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <div style="font-size: 1rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.5rem;">
+                <span>⚙️</span> 종종이 전략 설정 (백테스트 맞춤 인자)
+              </div>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 3px;">
+                보유일수, 위기준비율(AK), 수수료율 및 시장 모드별 익절률/분할수를 설정하여 시뮬레이션합니다.
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetBtJongJongParams()" style="font-size: 0.75rem; padding: 0.35rem 0.75rem;">
+              🔄 기본값 초기화
+            </button>
+          </div>
+
+          <!-- 상단 3개 기본 인자: 보유일수, 위기준비율, 수수료율 -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>최대 보유일수</span>
+                <span style="color: var(--text-muted); font-size: 0.72rem;">기본 10일</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <input type="number" id="bt-jj-hold-days" class="form-input" value="10" min="1" max="60" step="1" style="font-weight: 700; text-align: right; width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                <span style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">일</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>위기준비금 비율 (AK)</span>
+                <span style="color: var(--text-muted); font-size: 0.72rem;">기본 5.00%</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <input type="number" id="bt-jj-reserve-ratio" class="form-input" value="5.00" min="0" max="50" step="0.25" style="font-weight: 700; text-align: right; width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                <span style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">%</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>매매 수수료율</span>
+                <span style="color: var(--text-muted); font-size: 0.72rem;">기본 0.000%</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <input type="number" id="bt-jj-fee-rate" class="form-input" value="0.000" min="0" max="2" step="0.005" style="font-weight: 700; text-align: right; width: 100%; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+                <span style="color: var(--text-muted); font-size: 0.8rem; white-space: nowrap;">%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 하단: 시장 모드별 매도 & 분할수 테이블 -->
+          <div style="overflow-x: auto; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: var(--radius-sm);">
+            <table class="custom-table" style="width: 100%; margin: 0; border-collapse: collapse;">
+              <thead>
+                <tr style="background: rgba(15, 23, 42, 0.75);">
+                  <th style="padding: 0.65rem 0.85rem; text-align: left; width: 34%; font-size: 0.8rem;">시장 구분 모드</th>
+                  <th style="padding: 0.65rem 0.85rem; text-align: center; width: 33%; font-size: 0.8rem;">매도 목표수익률 (%)</th>
+                  <th style="padding: 0.65rem 0.85rem; text-align: center; width: 33%; font-size: 0.8rem;">자금 분할수 (조각)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(16, 185, 129, 0.05);">
+                  <td style="padding: 0.65rem 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span class="badge badge-mode-normal" style="font-size: 0.78rem; padding: 3px 8px; font-weight: 700;">Normal</span>
+                      <span style="font-size: 0.75rem; color: #10b981;">상승장 / 기본 모드</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.65rem 0.85rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; max-width: 130px;">
+                      <input type="number" id="bt-jj-normal-yield" class="form-input" value="2.75" step="0.05" style="text-align: right; font-weight: 700; color: #10b981; width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">%</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.65rem 0.85rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; max-width: 130px;">
+                      <input type="number" id="bt-jj-normal-splits" class="form-input" value="8" step="1" min="1" max="40" style="text-align: right; font-weight: 700; width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">조각</span>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(56, 189, 248, 0.05);">
+                  <td style="padding: 0.65rem 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span class="badge badge-mode-safe" style="font-size: 0.78rem; padding: 3px 8px; font-weight: 700;">Safe</span>
+                      <span style="font-size: 0.75rem; color: #38bdf8;">변동성 완화 / 안전 모드</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.65rem 0.85rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; max-width: 130px;">
+                      <input type="number" id="bt-jj-safe-yield" class="form-input" value="0.25" step="0.05" style="text-align: right; font-weight: 700; color: #38bdf8; width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">%</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.65rem 0.85rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; max-width: 130px;">
+                      <input type="number" id="bt-jj-safe-splits" class="form-input" value="7" step="1" min="1" max="40" style="text-align: right; font-weight: 700; width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">조각</span>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr style="background: rgba(244, 63, 94, 0.05);">
+                  <td style="padding: 0.65rem 0.85rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <span class="badge badge-mode-riskoff" style="font-size: 0.78rem; padding: 3px 8px; font-weight: 700;">Riskoff</span>
+                      <span style="font-size: 0.75rem; color: #f43f5e;">급락장 / 위험회피 모드</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.65rem 0.85rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; max-width: 130px;">
+                      <input type="number" id="bt-jj-riskoff-yield" class="form-input" value="0.70" step="0.05" style="text-align: right; font-weight: 700; color: #f43f5e; width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">%</span>
+                    </div>
+                  </td>
+                  <td style="padding: 0.65rem 0.85rem; text-align: center;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; width: 100%; max-width: 130px;">
+                      <input type="number" id="bt-jj-riskoff-splits" class="form-input" value="5" step="1" min="1" max="40" style="text-align: right; font-weight: 700; width: 100%; padding: 0.35rem 0.5rem; font-size: 0.82rem;">
+                      <span style="color: var(--text-muted); font-size: 0.8rem;">조각</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2. 비교 분석군 안내 카드 (항상 자동 포함) -->
+        <div class="comparison-group-card" style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius-sm); padding: 0.9rem 1.1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
+            <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+              <span>📊</span> 기본 벤치마크 비교군 (항상 자동 비교)
+            </div>
+            <div style="font-size: 0.72rem; color: #34d399; font-weight: 600; background: rgba(16,185,129,0.12); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.25);">
+              ✓ 4개 비교 전략이 그래프 및 성과표에 자동 표시됩니다
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(6, 182, 212, 0.12); border: 1px solid rgba(6, 182, 212, 0.35); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; color: #22d3ee;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #06b6d4; display: inline-block;"></span>
+              ⭐ 종종이 전략 (맞춤 인자 적용)
+            </div>
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; color: #93c5fd;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; display: inline-block;"></span>
+              무한매수법 v4.0 (40분할)
+            </div>
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; color: #fcd34d;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; display: inline-block;"></span>
+              VR 5.0 (밸류리밸런싱)
+            </div>
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; color: #6ee7b7;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+              🌊 웅덩이 매매법
+            </div>
+            <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(148, 163, 184, 0.1); border: 1px solid rgba(148, 163, 184, 0.25); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; color: #cbd5e1;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; display: inline-block;"></span>
+              단순보유 (B&H 벤치마크)
+            </div>
+          </div>
         </div>
 
         <!-- Dividend / Total Return Option -->
@@ -1133,6 +1270,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.5.2"></script>
+  <script src="/static/js/app.js?v=2.5.3"></script>
 </body>
 </html>

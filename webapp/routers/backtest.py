@@ -54,13 +54,31 @@ async def run_backtest_simulation(req: BacktestRequest):
         if df_market.empty:
             raise HTTPException(status_code=400, detail=f"[{ticker}] 기간 내 시세 데이터를 가져올 수 없습니다.")
 
+        # 비교군(무한매수법, VR5.0, 웅덩이 매매법, 단순보유법) 및 종종이 전략 기본 보장
+        base_strategies = [
+            "종종이 전략",
+            "무한매수법 v4.0",
+            "VR 5.0 (밸류리밸런싱)",
+            "웅덩이 매매법",
+            f"{ticker} 단순보유(B&H)",
+        ]
+
+        # 요청에 전략 목록이 있으면 순서를 존중하되, 누락된 비교군 전략들을 자동으로 추가
+        target_strategies = list(req.strategies) if req.strategies else list(base_strategies)
+        for bs in base_strategies:
+            # 부분 문자열 매칭으로 중복 추가 방지
+            bs_key = "종종" if "종종" in bs else ("무한" if "무한" in bs else ("VR" if "VR" in bs else ("웅덩이" if "웅덩이" in bs else "단순보유")))
+            if not any(bs_key in existing for existing in target_strategies):
+                target_strategies.append(bs)
+
         results = run_strategies(
             df_market=df_market,
             ticker=ticker,
             capital=req.capital,
             start_date=req.start_date,
             end_date=req.end_date,
-            strategy_names=req.strategies,
+            strategy_names=target_strategies,
+            jongjong_params=req.jongjong_params,
         )
 
         return sanitize_for_json({
