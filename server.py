@@ -55,9 +55,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 for module in (pages, auth, market, accounts, backtest, integrations):
     app.include_router(module.router)
 
-# 구글 드라이브 백그라운드 동기화 시작
-integrations.start_background_sync()
-
 
 if __name__ == "__main__":
     import uvicorn

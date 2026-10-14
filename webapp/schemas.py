@@ -71,8 +71,3 @@ class TelegramConfigRequest(BaseModel):
 class TelegramTestRequest(BaseModel):
     bot_token: Optional[str] = None
     chat_id: Optional[str] = None
-
-
-class SyncConfigRequest(BaseModel):
-    url: str
-    enabled: bool = True

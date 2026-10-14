@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="/static/css/style.css?v=2.4.3.6">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.4.3.7">
   
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -693,9 +693,6 @@
         <button type="button" class="setting-tab-btn active" id="btn-setting-tab-tg" onclick="switchSettingTab('tg')">
           <span>📱</span> 텔레그램 주문 알림
         </button>
-        <button type="button" class="setting-tab-btn" id="btn-setting-tab-sync" onclick="switchSettingTab('sync')">
-          <span>☁️</span> 구글 드라이브 동기화
-        </button>
         <button type="button" class="setting-tab-btn" id="btn-setting-tab-autotrade" onclick="switchSettingTab('autotrade')">
           <span>🤖</span> 오라클 자동매매
         </button>
@@ -796,181 +793,6 @@
           </div>
         </div>
 
-        <!-- [Panel 2: 구글 드라이브 동기화 설정] -->
-        <div id="setting-panel-sync" style="display:none;">
-          <!-- 지금 즉시 구글 동기화 수동 실행 버튼 -->
-          <div style="margin-bottom:1rem;">
-            <button type="button" class="btn btn-primary" id="btn-cloud-sync" onclick="triggerCloudSync()" style="width:100%;padding:0.65rem 1rem;font-weight:600;display:flex;align-items:center;justify-content:center;gap:0.5rem;">
-              <span>🔄</span> <span id="cloud-sync-label">지금 즉시 구글 동기화 실행 (수동 동기화)</span>
-            </button>
-          </div>
-
-          <div style="background:rgba(15,23,42,0.8);padding:1rem;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);margin-bottom:1rem;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.85rem;">
-              <span style="color:var(--text-muted);">동기화 연동 상태:</span>
-              <span id="sync-modal-status-text" style="color:var(--profit-green);font-weight:700;">활성화됨 (Active)</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.85rem;">
-              <span style="color:var(--text-muted);">최근 동기화 일시:</span>
-              <span id="sync-modal-last-time">-</span>
-            </div>
-            <div style="font-size:0.775rem;color:var(--text-muted);margin-top:0.3rem;" id="sync-modal-last-msg"></div>
-          </div>
-
-          <div class="form-group" style="margin-bottom:1rem;">
-            <label>Google Apps Script Web App URL</label>
-            <input type="text" id="sync-gas-url" class="form-input" placeholder="https://script.google.com/macros/s/.../exec">
-          </div>
-
-          <div class="form-group" style="margin-bottom:1rem;">
-            <label class="checkbox-label">
-              <input type="checkbox" id="sync-enabled-check" checked>
-              <span>Google Drive 자동 동기화 활성화</span>
-            </label>
-          </div>
-
-          <!-- 연결 테스트 버튼 -->
-          <div style="margin-bottom:1.25rem;">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-sync-test" onclick="sendSyncTest()" style="width:100%;border-color:#38bdf8;color:#38bdf8;">
-              <span>🔄</span> 구글 드라이브(GAS) 연결 테스트
-            </button>
-          </div>
-
-          <!-- 구글 드라이브(GAS) 설정 및 액션스크립트 발급 가이드 -->
-          <div style="background:rgba(15,23,42,0.85);border:1px solid rgba(56,189,248,0.3);border-radius:var(--radius-sm);padding:1rem 1.15rem;font-size:0.82rem;line-height:1.6;color:var(--text-secondary);">
-            <div style="font-weight:700;color:var(--text-bright);display:flex;align-items:center;gap:0.4rem;margin-bottom:0.75rem;font-size:0.9rem;">
-              <span>☁️</span> 구글 드라이브(GAS) 실시간 연동 가이드 (3분 완성)
-            </div>
-
-            <div style="display:flex;flex-direction:column;gap:0.75rem;">
-              <!-- 1단계: 구글 앱스 스크립트 생성 -->
-              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #38bdf8;">
-                <strong style="color:#38bdf8;font-size:0.85rem;">1. 구글 앱스 스크립트(Google Apps Script) 접속:</strong>
-                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
-                  <li><a href="https://script.google.com/home/start" target="_blank" style="color:var(--accent-cyan);text-decoration:none;font-weight:600;">script.google.com (바로가기 ↗)</a> 에 접속하여 구글 계정으로 로그인합니다.</li>
-                  <li>좌측 상단 <b>[+ 새 프로젝트]</b> 버튼을 누르고, 프로젝트 제목을 <code>JongJong Sync</code> 등으로 지정합니다.</li>
-                </ul>
-              </div>
-
-              <!-- 2단계: 액션스크립트 샘플 코드 붙여넣기 -->
-              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #fbbf24;">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
-                  <strong style="color:#fbbf24;font-size:0.85rem;">2. 액션스크립트(GAS) 샘플 코드 복사 및 붙여넣기:</strong>
-                  <button type="button" class="btn btn-secondary btn-xs" onclick="copyGasCode()" style="border-color:#fbbf24;color:#fbbf24;padding:0.2rem 0.6rem;font-size:0.75rem;">
-                    <span>📋</span> 전체 코드 원클릭 복사
-                  </button>
-                </div>
-                <div style="margin:0.4rem 0 0.5rem 0;">
-                  코드 편집기의 기존 <code>function myFunction() {}</code> 내용을 모두 지우고, 아래 코드를 붙여넣은 뒤 <b>저장(Ctrl + S)</b>합니다.
-                </div>
-                <div style="position:relative;">
-                  <pre id="gas-code-sample" style="background:#090d16;color:#e2e8f0;padding:0.75rem;border-radius:4px;font-size:0.725rem;line-height:1.45;max-height:170px;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);font-family:monospace;white-space:pre;">// =====================================================================
-// 종종이(JJ Invest) - Google Drive 실시간 계좌 동기화 스크립트
-// =====================================================================
-var FOLDER_NAME = "JongJongTrader";
-var FILE_NAME = "accounts.json";
-
-function getOrCreateFolder() {
-  var folders = DriveApp.getFoldersByName(FOLDER_NAME);
-  if (folders.hasNext()) return folders.next();
-  return DriveApp.createFolder(FOLDER_NAME);
-}
-
-function getOrCreateFile(folder) {
-  var files = folder.getFilesByName(FILE_NAME);
-  if (files.hasNext()) return files.next();
-  return folder.createFile(FILE_NAME, "[]", MimeType.PLAIN_TEXT);
-}
-
-function doGet(e) {
-  try {
-    var action = (e && e.parameter && e.parameter.action) || "download";
-    if (action === "ping") {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "ok",
-        message: "JongJong Google Drive Sync Connected!",
-        timestamp: new Date().toISOString()
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    var folder = getOrCreateFolder();
-    var file = getOrCreateFile(folder);
-    var content = file.getBlob().getDataAsString();
-    var updated = file.getLastUpdated().toISOString();
-    var parsedData = [];
-    try { parsedData = JSON.parse(content || "[]"); } catch(e) { parsedData = []; }
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "ok",
-      action: "download",
-      updated_at: updated,
-      data: parsedData
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doPost(e) {
-  try {
-    var folder = getOrCreateFolder();
-    var file = getOrCreateFile(folder);
-    var postData = (e && e.postData && e.postData.contents) || "";
-    if (!postData) {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: "error",
-        message: "전송된 데이터가 없습니다."
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    var payload = JSON.parse(postData);
-    var accountsData = payload.data !== undefined ? payload.data : payload;
-    var dataStr = typeof accountsData === "string" ? accountsData : JSON.stringify(accountsData, null, 2);
-    file.setContent(dataStr);
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "ok",
-      action: "upload",
-      message: "Sync success",
-      updated_at: new Date().toISOString(),
-      count: Array.isArray(accountsData) ? accountsData.length : 1
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}</pre>
-                </div>
-              </div>
-
-              <!-- 3단계: 웹 앱(Web App) 배포 및 권한 설정 -->
-              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #a855f7;">
-                <strong style="color:#c084fc;font-size:0.85rem;">3. 웹 앱(Web App) 배포 및 권한 설정 (필수):</strong>
-                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
-                  <li>우측 상단 파란색 <b>[배포]</b> 버튼 클릭 → <b>[새 배포]</b> 선택</li>
-                  <li>좌측 톱니바퀴 아이콘(유형 선택)에서 <b>[웹 앱]</b> 선택</li>
-                  <li>설정값:
-                    <br>• 설명: <code>JJ Invest Sync</code>
-                    <br>• 다음 사용자로 실행: <b>나(내 Google 계정)</b>
-                    <br>• 액세스 권한이 있는 사용자: <b style="color:#f87171;">모든 사용자(Anyone)</b> <span style="font-size:0.75rem;color:var(--text-muted);">(외부 서버 자동 동기화 필수)</span>
-                  </li>
-                  <li><b>[배포]</b> 클릭 후 '액세스 승인' 창이 나타나면 본인 계정 선택 → <b>고급</b> 클릭 → <b>[...(으)로 이동(안전하지 않음)]</b> 클릭 → <b>[허용]</b>을 누릅니다.</li>
-                </ul>
-              </div>
-
-              <!-- 4단계: URL 복사 및 연결 테스트 -->
-              <div style="background:rgba(30,41,59,0.5);padding:0.65rem 0.85rem;border-radius:4px;border-left:3px solid #10b981;">
-                <strong style="color:#34d399;font-size:0.85rem;">4. 웹 앱 URL 복사 및 연동 테스트:</strong>
-                <ul style="margin:0.25rem 0 0 1.2rem;padding:0;">
-                  <li>배포 완료 창에 표시된 <b>웹 앱 URL (<code>https://script.google.com/macros/s/.../exec</code>)</b>을 복사합니다.</li>
-                  <li>위 <b>[Google Apps Script Web App URL]</b> 입력창에 붙여넣습니다.</li>
-                  <li>위의 <b>[🔄 구글 드라이브(GAS) 연결 테스트]</b> 버튼을 눌러 연동 성공을 확인한 뒤 아래 <b>[설정 저장하기]</b>를 누르면 완료됩니다.</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- [Panel 3: 오라클 자동매매 데몬 제어] -->
         <div id="setting-panel-autotrade" style="display:none;">
@@ -1086,6 +908,6 @@ function doPost(e) {
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.4.3.6"></script>
+  <script src="/static/js/app.js?v=2.4.3.7"></script>
 </body>
 </html>

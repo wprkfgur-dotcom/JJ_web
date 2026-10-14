@@ -696,11 +696,6 @@ async function loadSettings() {
       document.getElementById('m-tg-enabled').checked = tg.enabled;
     }
     
-    const csRes = await mApi('/api/sync/status');
-    if (csRes.ok) {
-      const cs = await csRes.json();
-      document.getElementById('m-cs-url').value = cs.url || '';
-    }
     
     const atRes = await mApi('/api/autotrade/status');
     if (atRes.ok) {
@@ -746,30 +741,6 @@ async function mTestTelegram() {
   }
 }
 
-async function mSyncGoogleDrive() {
-  const url = document.getElementById('m-cs-url').value.trim();
-  try {
-    if (url) {
-      await mApi('/api/sync/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, enabled: true })
-      });
-    }
-    mToast('구글 드라이브 동기화 진행 중...');
-    const res = await mApi('/api/sync/pull', { method: 'POST' });
-    const d = await res.json();
-    if (d.success) {
-      mToast('구글 드라이브 동기화 성공!');
-      loadDashboard();
-      loadAccounts();
-    } else {
-      throw new Error(d.message);
-    }
-  } catch (e) {
-    mToast(`동기화 실패: ${e.message}`, true);
-  }
-}
 
 async function mToggleAutotrade() {
   try {

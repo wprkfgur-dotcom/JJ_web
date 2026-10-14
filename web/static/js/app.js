@@ -176,7 +176,6 @@ function initApp() {
   initTickerRibbon();
   loadServerStatus();
   loadAccounts();
-  loadCloudSyncStatus();
   initBacktestPresets();
 
   if (pollingInterval) clearInterval(pollingInterval);
@@ -184,7 +183,6 @@ function initApp() {
     if (state.user) {
       loadServerStatus();
       loadAccounts(true);
-      loadCloudSyncStatus();
     }
   }, 15000);
 }
@@ -1454,50 +1452,13 @@ function showToast(msg, type = 'info') {
 }
 
 // -------------------------------------------------------------------
-// 구글 드라이브 (GAS) 클라우드 동기화
+// 시스템 설정 모달 (텔레그램 / 자동매매 / 관리자)
 // -------------------------------------------------------------------
-async function triggerCloudSync() {
-  const btn = document.getElementById('btn-cloud-sync');
-  const label = document.getElementById('cloud-sync-label');
-  const oldText = label ? label.textContent : '';
-  if (label) label.textContent = '동기화 중...';
-  if (btn) btn.disabled = true;
-
-  try {
-    const res = await fetch('/api/sync/pull', { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message || '구글 드라이브와 동기화 완료!');
-      await loadAccounts();
-    } else {
-      showToast(`동기화 실패: ${data.message}`, 'error');
-    }
-  } catch (e) {
-    showToast('구글 동기화 요청 실패', 'error');
-  } finally {
-    if (label) label.textContent = oldText;
-    if (btn) btn.disabled = false;
-    loadCloudSyncStatus();
-  }
-}
-
-async function loadCloudSyncStatus() {
-  try {
-    const res = await fetch('/api/sync/status');
-    const data = await res.json();
-    const label = document.getElementById('cloud-sync-label');
-    if (label && data.last_sync_time) {
-      const timeStr = data.last_sync_time.substring(11, 16);
-      label.textContent = `구글 동기화 (${timeStr})`;
-    }
-  } catch (e) {}
-}
-
 let currentSettingTab = 'tg';
 
 function switchSettingTab(tab) {
   currentSettingTab = tab;
-  const tabs = ['tg', 'sync', 'autotrade', 'admin'];
+  const tabs = ['tg', 'autotrade', 'admin'];
 
   tabs.forEach(t => {
     const btn = document.getElementById(`btn-setting-tab-${t}`);
@@ -1515,7 +1476,7 @@ function switchSettingTab(tab) {
 
   const saveBtn = document.getElementById('btn-save-settings');
   if (saveBtn) {
-    saveBtn.style.display = (tab === 'tg' || tab === 'sync') ? 'inline-flex' : 'none';
+    saveBtn.style.display = (tab === 'tg') ? 'inline-flex' : 'none';
   }
 
   if (tab === 'admin') {
@@ -1560,25 +1521,6 @@ async function openSyncSettingsModal() {
     }
   } catch (e) {
     console.error('Telegram config load error:', e);
-  }
-
-  // 2. 구글 드라이브 설정 로드
-  try {
-    const res = await fetch('/api/sync/status');
-    const data = await res.json();
-    document.getElementById('sync-gas-url').value = data.url || '';
-    document.getElementById('sync-enabled-check').checked = Boolean(data.enabled);
-    const statusText = document.getElementById('sync-modal-status-text');
-    if (statusText) {
-      statusText.textContent = data.enabled ? '활성화됨 (Active)' : '비활성화됨 (Disabled)';
-      statusText.style.color = data.enabled ? 'var(--profit-green)' : 'var(--text-muted)';
-    }
-    const lastTime = document.getElementById('sync-modal-last-time');
-    if (lastTime) lastTime.textContent = data.last_sync_time || '동기화 이력 없음';
-    const lastMsg = document.getElementById('sync-modal-last-msg');
-    if (lastMsg) lastMsg.textContent = data.last_sync_message || '';
-  } catch (e) {
-    console.error('Sync config load error:', e);
   }
 }
 
@@ -1635,82 +1577,6 @@ async function sendTelegramTest() {
   }
 }
 
-async function sendSyncTest() {
-  const url = document.getElementById('sync-gas-url').value.trim();
-  const testBtn = document.getElementById('btn-sync-test');
-
-  if (!url || !url.startsWith('http')) {
-    showToast('유효한 Google Apps Script Web App URL을 먼저 입력해주세요.', 'error');
-    document.getElementById('sync-gas-url').focus();
-    return;
-  }
-
-  const origText = testBtn ? testBtn.innerHTML : '';
-  if (testBtn) {
-    testBtn.disabled = true;
-    testBtn.innerHTML = '<span>⏳</span> 구글 드라이브 연결 확인 중...';
-  }
-
-  try {
-    const res = await fetch('/api/sync/test', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, enabled: true })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast(data.message || '구글 드라이브(GAS) 연동 성공! ☁️', 'success');
-      const statusText = document.getElementById('sync-modal-status-text');
-      if (statusText) {
-        statusText.textContent = '연동 성공 (Connected)';
-        statusText.style.color = 'var(--profit-green)';
-      }
-      const timeEl = document.getElementById('sync-modal-last-time');
-      if (timeEl) timeEl.textContent = new Date().toLocaleString();
-      const msgEl = document.getElementById('sync-modal-last-msg');
-      if (msgEl) msgEl.textContent = 'Ping 테스트 성공';
-    } else {
-      showToast(`연동 테스트 실패: ${data.message}`, 'error');
-    }
-  } catch (e) {
-    showToast(`연동 테스트 오류: ${e.message}`, 'error');
-  } finally {
-    if (testBtn) {
-      testBtn.disabled = false;
-      testBtn.innerHTML = origText;
-    }
-  }
-}
-
-function copyGasCode() {
-  const codeEl = document.getElementById('gas-code-sample');
-  if (!codeEl) return;
-  const text = codeEl.textContent;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => {
-      showToast('액션스크립트(GAS) 샘플 코드가 클립보드에 복사되었습니다! 📋', 'success');
-    }).catch(() => {
-      fallbackCopyText(text);
-    });
-  } else {
-    fallbackCopyText(text);
-  }
-}
-
-function fallbackCopyText(text) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  document.body.appendChild(textarea);
-  textarea.select();
-  try {
-    document.execCommand('copy');
-    showToast('액션스크립트(GAS) 샘플 코드가 클립보드에 복사되었습니다! 📋', 'success');
-  } catch (err) {
-    showToast('클립보드 복사 실패', 'error');
-  }
-  document.body.removeChild(textarea);
-}
-
 async function saveActiveSettings() {
   if (currentSettingTab === 'tg') {
     // 텔레그램 설정 저장
@@ -1730,28 +1596,6 @@ async function saveActiveSettings() {
         closeModal('cloudSyncModal');
       } else {
         showToast(`저장 실패: ${data.message}`, 'error');
-      }
-    } catch (e) {
-      showToast('설정 저장 실패', 'error');
-    }
-  } else {
-    // 구글 동기화 설정 저장
-    const url = document.getElementById('sync-gas-url').value.trim();
-    const enabled = document.getElementById('sync-enabled-check').checked;
-
-    try {
-      const res = await fetch('/api/sync/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, enabled })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('구글 동기화 설정이 저장되었습니다!');
-        closeModal('cloudSyncModal');
-        await loadAccounts();
-      } else {
-        showToast(`동기화 실패: ${data.message}`, 'error');
       }
     } catch (e) {
       showToast('설정 저장 실패', 'error');

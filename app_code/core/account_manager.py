@@ -66,14 +66,17 @@ class AccountManager:
             return []
 
     def save_accounts(self, accounts: list, skip_cloud_sync: bool = False):
-        with open(self.filepath, 'w', encoding='utf-8') as f:
+        """계좌 및 거래 일지 데이터를 서버 로컬 스토리지에 안전하게 영구 저장 (자동 백업 포함)"""
+        tmp_file = f"{self.filepath}.tmp"
+        with open(tmp_file, 'w', encoding='utf-8') as f:
             json.dump(accounts, f, ensure_ascii=False, indent=2)
-        if not skip_cloud_sync:
-            try:
-                from core.cloud_sync import trigger_async_upload
-                trigger_async_upload(accounts)
-            except Exception:
-                pass
+        os.replace(tmp_file, self.filepath)
+        try:
+            backup_file = self.filepath.replace("accounts.json", "accounts.backup.json")
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                json.dump(accounts, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     def add_account(self, name: str, strategy: str, ticker: str, start_date: str, initial_seed: float, memo: str = "",
                     trade_records: list = None, adjustments: list = None, current_date: str = None, operational_state: str = None,
