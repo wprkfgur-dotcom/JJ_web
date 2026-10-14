@@ -94,6 +94,7 @@ class MeritzOrderExecuteRequest(BaseModel):
 class AccountBrokerConfigRequest(BaseModel):
     broker: str = Field(default="meritz", example="meritz")  # "meritz", "kiwoom", "kis"
     enabled: bool = Field(default=False)
+    notify_telegram: bool = Field(default=True)
     app_key: Optional[str] = Field(default=None)
     app_secret: Optional[str] = Field(default=None)
 

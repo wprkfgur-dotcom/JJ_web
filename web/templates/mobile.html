@@ -513,6 +513,17 @@
           </select>
         </div>
 
+        <!-- 텔레그램 실시간 알림 안내 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.65rem 0.8rem; background: rgba(15, 23, 42, 0.5); border-radius: var(--m-radius-sm); border: 1px solid var(--m-border-subtle);">
+          <div>
+            <div style="font-weight: 700; font-size: 0.8rem; color: var(--m-text-primary);">📢 Open API 텔레그램 실시간 전송</div>
+            <div style="font-size: 0.7rem; color: var(--m-text-muted); margin-top: 1px;">모든 Rest API 호출 내역 자동 발송</div>
+          </div>
+          <span style="font-size: 0.7rem; color: var(--m-accent-cyan); background: rgba(56, 189, 248, 0.15); padding: 2px 6px; border-radius: 4px; font-weight: 600; white-space: nowrap;">
+            강제 전송 (ON)
+          </span>
+        </div>
+
         <!-- 키움 / 한투 구현 예정 배너 -->
         <div id="m-broker-pending-banner" style="display: none; padding: 1rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--m-radius-sm); text-align: center;">
           <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">🚧</div>
@@ -557,6 +568,6 @@
   <div class="m-toast" id="m-toast-box"></div>
 
   <!-- Mobile JavaScript -->
-  <script src="/static/js/mobile.js?v=2.4.3.7"></script>
+  <script src="/static/js/mobile.js?v=2.4.4.0"></script>
 </body>
 </html>

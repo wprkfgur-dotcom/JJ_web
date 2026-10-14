@@ -320,6 +320,7 @@ async def save_account_broker(acc_id: str, req: AccountBrokerConfigRequest, requ
             acc_id=acc_id,
             broker=broker_name,
             enabled=req.enabled,
+            notify_telegram=req.notify_telegram,
             check_status="PENDING",
             check_message="구현 예정입니다."
         )
@@ -333,7 +334,8 @@ async def save_account_broker(acc_id: str, req: AccountBrokerConfigRequest, requ
     cfg = am.save_account_broker_config(
         acc_id=acc_id,
         broker=broker_name,
-        enabled=req.enabled
+        enabled=req.enabled,
+        notify_telegram=req.notify_telegram
     )
     return {"success": True, "message": "자동매매 설정이 저장되었습니다.", "config": cfg}
 
@@ -384,21 +386,23 @@ async def check_and_save_broker(acc_id: str, req: AccountBrokerConfigRequest, re
                 "message": msg
             }
 
+        clean_success_msg = "메리츠증권 Open API 연동 검증이 완료되었습니다."
+
         # 검증 성공 시 대칭키 암호화하여 영구 저장
         saved_cfg = am.save_account_broker_config(
             acc_id=acc_id,
             broker="meritz",
             enabled=req.enabled,
+            notify_telegram=req.notify_telegram,
             app_key=app_key,
             app_secret=app_secret,
             check_status="SUCCESS",
-            check_message=msg
+            check_message=clean_success_msg
         )
 
         return {
             "success": True,
-            "message": msg,
-            "data": data,
+            "message": clean_success_msg,
             "config": saved_cfg
         }
 

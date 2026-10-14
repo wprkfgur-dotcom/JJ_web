@@ -239,6 +239,7 @@ class AccountManager:
             'ticker': target.get('ticker'),
             'enabled': bool(cfg.get('enabled', False)),
             'broker': cfg.get('broker', 'meritz'),
+            'notify_telegram': bool(cfg.get('notify_telegram', True)),
             'has_credentials': has_creds,
             'app_key_masked': cfg.get('app_key_masked', ''),
             'last_checked_at': cfg.get('last_checked_at'),
@@ -247,6 +248,7 @@ class AccountManager:
         }
 
     def save_account_broker_config(self, acc_id: str, broker: str, enabled: bool,
+                                   notify_telegram: bool = True,
                                    app_key: str = None, app_secret: str = None,
                                    check_status: str = "SUCCESS", check_message: str = "") -> dict:
         """
@@ -275,6 +277,7 @@ class AccountManager:
         target['auto_trade'] = {
             'enabled': bool(enabled),
             'broker': broker.lower().strip() if broker else 'meritz',
+            'notify_telegram': bool(notify_telegram),
             'app_key_enc': app_key_enc,
             'app_secret_enc': app_secret_enc,
             'app_key_masked': app_key_masked,

@@ -127,19 +127,91 @@ class MeritzClient:
             return False, f"메리츠 토큰은 발급되었으나 잔고 조회 실패: {msg}", {}
 
         usd_dep = bal_res.get("usd_deposit", 0.0)
-        total_asset = bal_res.get("usd_total_asset", 0.0)
-        ex_rate = bal_res.get("exchange_rate", 0.0)
-
-        msg = f"메리츠증권 연동 성공! (외화 예수금: ${usd_dep:,.2f}"
-        if total_asset > 0:
-            msg += f", 총 자산: ${total_asset:,.2f}"
-        msg += ")"
+        msg = "메리츠증권 Open API 연동 검증이 완료되었습니다."
 
         return True, msg, {
             "usd_deposit": usd_dep,
             "usd_total_asset": total_asset,
             "exchange_rate": ex_rate
         }
+
+    # -----------------------------------------------------------------
+    # REST API 공통 실행 및 텔레그램 강제 알림 래퍼
+    # -----------------------------------------------------------------
+    def _api_request(
+        self,
+        method: str,
+        endpoint: str,
+        api_title: str,
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        json_data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        timeout: int = 12,
+        audit_details: Optional[Dict[str, Any]] = None
+    ) -> Tuple[bool, int, Dict[str, Any], str]:
+        """
+        모든 메리츠 Open API Rest 요청을 실행하고 결과를 텔레그램으로 강제 통보합니다.
+        """
+        url = f"{self.base_url}{endpoint}" if not endpoint.startswith("http") else endpoint
+        req_method = method.upper().strip()
+
+        status_code = 0
+        res_json = {}
+        error_msg = ""
+        success = False
+        summary = ""
+
+        try:
+            if req_method == "POST":
+                resp = self.session.post(url, headers=headers, data=data, json=json_data, timeout=timeout)
+            else:
+                resp = self.session.get(url, headers=headers, params=params, timeout=timeout)
+
+            status_code = resp.status_code
+            try:
+                res_json = resp.json()
+            except Exception:
+                res_json = {"raw_text": resp.text[:500]}
+
+            rsp_cd = str(res_json.get("rsp_cd", "") or "")
+            if status_code == 200 and (rsp_cd in ("0000", "0001", "5620", "5762", "5766", "5820", "5822") or ("access_token" in res_json)):
+                success = True
+                summary = res_json.get("rsp_msg") or ("정상 처리" if rsp_cd in ("0000", "0001", "") else f"응답 코드 {rsp_cd}")
+            else:
+                success = False
+                summary = res_json.get("rsp_msg") or res_json.get("error_description") or f"HTTP {status_code}"
+                error_msg = f"[{rsp_cd}] {summary}"
+
+        except Exception as ex:
+            success = False
+            summary = "네트워크/통신 오류"
+            error_msg = str(ex)
+
+        # 등록된 텔레그램으로 강제 알림 전송
+        try:
+            from core.telegram_notifier import notify_rest_api_call
+
+            details = {}
+            if audit_details:
+                details.update(audit_details)
+            details["HTTP 상태"] = f"{status_code}" if status_code > 0 else "연결 실패"
+            if res_json.get("rsp_cd"):
+                details["응답 코드"] = res_json.get("rsp_cd")
+
+            notify_rest_api_call(
+                api_title=api_title,
+                method=req_method,
+                endpoint=endpoint,
+                status_text=summary,
+                success=success,
+                details=details,
+                error_msg=error_msg if not success else None
+            )
+        except Exception as tg_err:
+            print(f"[Telegram Audit Error] {tg_err}")
+
+        return success, status_code, res_json, error_msg or summary
 
     # -----------------------------------------------------------------
     # 1. 인증 및 토큰 관리 (OAuth 2.0)
@@ -160,7 +232,7 @@ class MeritzClient:
         if not app_key or not app_secret:
             return False, "메리츠 App Key 및 App Secret이 설정되지 않았습니다."
 
-        url = f"{self.base_url}/oauth2/token"
+        endpoint = "/oauth2/token"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "mac_address": get_mac_address()
@@ -172,22 +244,23 @@ class MeritzClient:
             "scope": "login"
         }
 
-        try:
-            resp = self.session.post(url, headers=headers, data=data, timeout=10)
-            res_json = resp.json()
-            
-            # 메리츠 토큰 응답 형식: {"access_token": "...", "expires_in": 86400, "token_type": "Bearer"}
-            if resp.status_code == 200 and "access_token" in res_json:
-                self._access_token = res_json["access_token"]
-                expires_in = int(res_json.get("expires_in", 86400))
-                self._token_expires_at = now + expires_in
-                return True, self._access_token
-            else:
-                msg = res_json.get("error_description") or res_json.get("rsp_msg") or str(res_json)
-                return False, f"토큰 발급 실패 ({resp.status_code}): {msg}"
+        masked_key = f"{app_key[:6]}...{app_key[-4:]}" if len(app_key) > 10 else "등록된 키"
+        success, status_code, res_json, err = self._api_request(
+            method="POST",
+            endpoint=endpoint,
+            api_title="메리츠증권 OAuth 토큰 발급",
+            headers=headers,
+            data=data,
+            audit_details={"App Key": masked_key}
+        )
 
-        except Exception as e:
-            return False, f"토큰 요청 통신 에러: {e}"
+        if success and "access_token" in res_json:
+            self._access_token = res_json["access_token"]
+            expires_in = int(res_json.get("expires_in", 86400))
+            self._token_expires_at = now + expires_in
+            return True, self._access_token
+        else:
+            return False, f"토큰 발급 실패: {err}"
 
     def _get_headers(self, token: str) -> Dict[str, str]:
         """공통 요청 헤더 생성"""
@@ -204,49 +277,49 @@ class MeritzClient:
         """
         해외주식 외화잔고 / 예수금 조회
         GET /accounts/v1/me/overseas/currencies
-        (계좌번호는 앱키에 바인딩되어 있으므로 파라미터 제외)
         """
         ok, token = self.get_access_token()
         if not ok:
             return {"success": False, "message": token}
 
-        url = f"{self.base_url}/accounts/v1/me/overseas/currencies"
-        try:
-            resp = self.session.get(url, headers=self._get_headers(token), timeout=10)
-            res_json = resp.json()
-            data = res_json.get("data") or {}
-            rsp_cd = res_json.get("rsp_cd")
+        endpoint = "/accounts/v1/me/overseas/currencies"
+        success, status_code, res_json, err = self._api_request(
+            method="GET",
+            endpoint=endpoint,
+            api_title="해외주식 외화 예수금/잔고 조회",
+            headers=self._get_headers(token)
+        )
 
-            if rsp_cd in ("0000", "0001", "5820", "5822") or bool(data):
-                # USD 통화 항목 추출
-                usd_info = {}
-                if isinstance(data, list):
-                    for item in data:
-                        if item.get("crcd") == "USD" or item.get("crnc_code") == "USD":
-                            usd_info = item
-                            break
-                elif isinstance(data, dict):
-                    usd_info = data
+        data = res_json.get("data") or {}
+        rsp_cd = res_json.get("rsp_cd")
 
-                estm_amt = float(usd_info.get("estm_frcr_amt") or usd_info.get("frcr_dncl_amt_smtl") or usd_info.get("frcr_amt") or 0.0)
-                total_asset = float(usd_info.get("entm_aset_vltn_amt") or 0.0)
-                ex_rate = float(usd_info.get("vltn_exrt") or 0.0)
+        if success and (rsp_cd in ("0000", "0001", "5820", "5822") or bool(data)):
+            usd_info = {}
+            if isinstance(data, list):
+                for item in data:
+                    if item.get("crcd") == "USD" or item.get("crnc_code") == "USD":
+                        usd_info = item
+                        break
+            elif isinstance(data, dict):
+                usd_info = data
 
-                return {
-                    "success": True,
-                    "data": data,
-                    "usd_deposit": estm_amt,
-                    "usd_total_asset": total_asset,
-                    "exchange_rate": ex_rate,
-                    "message": "외화 잔고 조회 성공"
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"[{rsp_cd}] {res_json.get('rsp_msg')} ({res_json.get('rsp_sub_msg', '')})"
-                }
-        except Exception as e:
-            return {"success": False, "message": f"외화 잔고 조회 오류: {e}"}
+            estm_amt = float(usd_info.get("estm_frcr_amt") or usd_info.get("frcr_dncl_amt_smtl") or usd_info.get("frcr_amt") or 0.0)
+            total_asset = float(usd_info.get("entm_aset_vltn_amt") or 0.0)
+            ex_rate = float(usd_info.get("vltn_exrt") or 0.0)
+
+            return {
+                "success": True,
+                "data": data,
+                "usd_deposit": estm_amt,
+                "usd_total_asset": total_asset,
+                "exchange_rate": ex_rate,
+                "message": "외화 잔고 조회 성공"
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"외화 잔고 조회 실패: {err}"
+            }
 
     def get_overseas_holdings(self) -> Dict[str, Any]:
         """
@@ -257,41 +330,43 @@ class MeritzClient:
         if not ok:
             return {"success": False, "message": token}
 
-        url = f"{self.base_url}/accounts/v1/me/overseas/holdings"
-        try:
-            resp = self.session.get(url, headers=self._get_headers(token), timeout=10)
-            res_json = resp.json()
-            data = res_json.get("data") or []
-            rsp_cd = res_json.get("rsp_cd")
+        endpoint = "/accounts/v1/me/overseas/holdings"
+        success, status_code, res_json, err = self._api_request(
+            method="GET",
+            endpoint=endpoint,
+            api_title="해외주식 보유 종목 잔고 조회",
+            headers=self._get_headers(token)
+        )
 
-            if rsp_cd in ("0000", "0001", "5620", "5762", "5766", "5820", "5822") or isinstance(data, list):
-                holdings = []
-                for row in (data if isinstance(data, list) else []):
-                    ticker = row.get("ovrs_stck_symb_iscd") or (row.get("iscd", "").split(".")[0])
-                    shares = int(float(row.get("rmnd_dqty") or row.get("seln_able_dqty") or row.get("cblc_qty") or 0))
-                    holdings.append({
-                        "ticker": ticker,
-                        "name": row.get("isnm") or row.get("ovrs_isnm") or row.get("kor_isnm") or ticker,
-                        "shares": shares,
-                        "avg_price": float(row.get("avrg_unpr") or row.get("pchs_avg_pric") or 0.0),
-                        "current_price": float(row.get("psnt_prc") or row.get("now_pric") or 0.0),
-                        "eval_amt": float(row.get("frcr_vltn_amt") or row.get("evlu_amt") or 0.0),
-                        "profit_amt": float(row.get("vltn_prls_camt") or 0.0),
-                        "profit_pct": float(row.get("vltn_ert") or row.get("evlu_pfls_rt") or 0.0),
-                        "exchange_code": row.get("ovrs_exch_vndr_idno") or "0537"
-                    })
-                return {
-                    "success": True,
-                    "holdings": holdings,
-                    "message": "해외주식 잔고 조회 성공"
-                }
-            else:
-                return {
-                    "success": False,
-                    "message": f"[{rsp_cd}] {res_json.get('rsp_msg')} ({res_json.get('rsp_sub_msg', '')})"
-                }
-        except Exception as e:
-            return {"success": False, "message": f"해외주식 잔고 조회 오류: {e}"}
+        data = res_json.get("data") or []
+        rsp_cd = res_json.get("rsp_cd")
+
+        if success and (rsp_cd in ("0000", "0001", "5620", "5762", "5766", "5820", "5822") or isinstance(data, list)):
+            holdings = []
+            for row in (data if isinstance(data, list) else []):
+                ticker = row.get("ovrs_stck_symb_iscd") or (row.get("iscd", "").split(".")[0])
+                shares = int(float(row.get("rmnd_dqty") or row.get("seln_able_dqty") or row.get("cblc_qty") or 0))
+                holdings.append({
+                    "ticker": ticker,
+                    "name": row.get("isnm") or row.get("ovrs_isnm") or row.get("kor_isnm") or ticker,
+                    "shares": shares,
+                    "avg_price": float(row.get("avrg_unpr") or row.get("pchs_avg_pric") or 0.0),
+                    "current_price": float(row.get("psnt_prc") or row.get("now_pric") or 0.0),
+                    "eval_amt": float(row.get("frcr_vltn_amt") or row.get("evlu_amt") or 0.0),
+                    "profit_amt": float(row.get("vltn_prls_camt") or 0.0),
+                    "profit_pct": float(row.get("vltn_ert") or row.get("evlu_pfls_rt") or 0.0),
+                    "exchange_code": row.get("ovrs_exch_vndr_idno") or "0537"
+                })
+            return {
+                "success": True,
+                "holdings": holdings,
+                "message": "해외주식 잔고 조회 성공"
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"해외주식 잔고 조회 실패: {err}"
+            }
 
     # -----------------------------------------------------------------
     # 3. 해외주식 주문 (LOC / 지정가)
@@ -336,18 +411,40 @@ class MeritzClient:
             "warn_cnfr_yn": "Y"        # 미국 PTP/위험 확인 시 자동 'Y' 재전송 플래그
         }
 
-        # Dry-Run (모의 시뮬레이션 모드)인 경우 API 호출 없이 성공 모의 응답
+        # Dry-Run (모의 시뮬레이션 모드)인 경우에도 텔레그램 알림 전송
         if is_simulation:
+            sim_id = f"SIM_{int(time.time()*1000)}"
+            sim_msg = f"[모의 실행(Dry-Run)] {symbol} {side.upper()} {qty}주 @ ${price:.2f} ({order_type.upper()}) 주문 시뮬레이션 완료"
+            try:
+                from core.telegram_notifier import notify_rest_api_call
+                notify_rest_api_call(
+                    api_title=f"미국주식 {side.upper()} 주문 (모의 시뮬레이션)",
+                    method="POST",
+                    endpoint=f"/trading/v1/overseas/orders/{side.lower()}",
+                    status_text=sim_msg,
+                    success=True,
+                    details={
+                        "종목": symbol,
+                        "구분": f"{side.upper()} ({order_type.upper()})",
+                        "수량": f"{qty}주",
+                        "주문단가": f"${price:,.2f}",
+                        "주문번호": sim_id,
+                        "모드": "모의 실행 (Dry-Run)"
+                    }
+                )
+            except Exception as e:
+                print(f"[Telegram Sim Hook Error] {e}")
+
             return {
                 "success": True,
                 "simulation": True,
-                "order_id": f"SIM_{int(time.time()*1000)}",
+                "order_id": sim_id,
                 "symbol": symbol,
                 "side": side.upper(),
                 "order_type": order_type.upper(),
                 "qty": qty,
                 "price": price,
-                "message": f"[모의 실행(Dry-Run)] {symbol} {side.upper()} {qty}주 @ ${price:.2f} ({order_type.upper()}) 주문 시뮬레이션 성공"
+                "message": sim_msg
             }
 
         # 실주문 발송
@@ -356,46 +453,54 @@ class MeritzClient:
             return {"success": False, "message": token}
 
         endpoint = "/trading/v1/overseas/orders/buy" if side.upper() == "BUY" else "/trading/v1/overseas/orders/sell"
-        url = f"{self.base_url}{endpoint}"
+        success, status_code, res_json, err = self._api_request(
+            method="POST",
+            endpoint=endpoint,
+            api_title=f"해외주식 {side.upper()} 주문 전송 ({order_type.upper()})",
+            headers=self._get_headers(token),
+            json_data=order_data,
+            audit_details={
+                "종목": symbol,
+                "주문 구분": f"{side.upper()} ({order_type.upper()})",
+                "수량": f"{qty}주",
+                "주문단가": f"${price:,.2f}",
+                "거래소": exch_code
+            }
+        )
 
-        try:
-            resp = self.session.post(url, headers=self._get_headers(token), json=order_data, timeout=12)
-            res_json = resp.json()
-            rsp_cd = res_json.get("rsp_cd")
-            data = res_json.get("data") or {}
+        rsp_cd = res_json.get("rsp_cd")
+        data = res_json.get("data") or {}
 
-            # 주문 경고 확인 체크: warn_cls_code 가 0 이 아니면 미접수 상태
-            warn_cls_code = str(data.get("warn_cls_code", "0"))
-            if warn_cls_code not in ("0", ""):
-                warn_msg = data.get("warn_msg", "") or res_json.get("rsp_msg", "")
-                return {
-                    "success": False,
-                    "warn_cls_code": warn_cls_code,
-                    "message": f"주문 경고(미접수): [{warn_cls_code}] {warn_msg}"
-                }
+        # 주문 경고 확인 체크: warn_cls_code 가 0 이 아니면 미접수 상태
+        warn_cls_code = str(data.get("warn_cls_code", "0"))
+        if warn_cls_code not in ("0", ""):
+            warn_msg = data.get("warn_msg", "") or res_json.get("rsp_msg", "")
+            return {
+                "success": False,
+                "warn_cls_code": warn_cls_code,
+                "message": f"주문 경고(미접수): [{warn_cls_code}] {warn_msg}"
+            }
 
-            if rsp_cd in ("0000", "0001"):
-                odno = data.get("odno") or data.get("oder_no") or "UNKNOWN"
-                return {
-                    "success": True,
-                    "simulation": False,
-                    "order_id": odno,
-                    "symbol": symbol,
-                    "side": side.upper(),
-                    "order_type": order_type.upper(),
-                    "qty": qty,
-                    "price": price,
-                    "data": data,
-                    "message": f"[{symbol}] {side.upper()} {qty}주 @ ${price:.2f} ({order_type.upper()}) 실주문 접수 완료 (주문번호: {odno})"
-                }
-            else:
-                return {
-                    "success": False,
-                    "rsp_cd": rsp_cd,
-                    "message": f"주문 실패 [{rsp_cd}]: {res_json.get('rsp_msg')} ({res_json.get('rsp_sub_msg', '')})"
-                }
-        except Exception as e:
-            return {"success": False, "message": f"주문 전송 네트워크 오류: {e}"}
+        if success and rsp_cd in ("0000", "0001"):
+            odno = data.get("odno") or data.get("oder_no") or "UNKNOWN"
+            return {
+                "success": True,
+                "simulation": False,
+                "order_id": odno,
+                "symbol": symbol,
+                "side": side.upper(),
+                "order_type": order_type.upper(),
+                "qty": qty,
+                "price": price,
+                "data": data,
+                "message": f"[{symbol}] {side.upper()} {qty}주 @ ${price:.2f} ({order_type.upper()}) 실주문 접수 완료 (주문번호: {odno})"
+            }
+        else:
+            return {
+                "success": False,
+                "rsp_cd": rsp_cd,
+                "message": f"주문 실패 [{rsp_cd}]: {res_json.get('rsp_msg')} ({res_json.get('rsp_sub_msg', '')})"
+            }
 
     # -----------------------------------------------------------------
     # 4. 당일 주문 및 체결 내역 조회
@@ -409,20 +514,25 @@ class MeritzClient:
         if not ok:
             return {"success": False, "message": token}
 
-        url = f"{self.base_url}/trading/v1/overseas/orders/today"
+        endpoint = "/trading/v1/overseas/orders/today"
         params = {"cntg_cls_code": "0", "seln_byov_clcd": "0"}  # 전체 조회
+        success, status_code, res_json, err = self._api_request(
+            method="GET",
+            endpoint=endpoint,
+            api_title="당일 주문체결내역 조회",
+            headers=self._get_headers(token),
+            params=params
+        )
 
-        try:
-            resp = self.session.get(url, headers=self._get_headers(token), params=params, timeout=10)
-            res_json = resp.json()
-            data = res_json.get("data") or []
+        data = res_json.get("data") or []
+        if success:
             return {
                 "success": True,
                 "orders": data if isinstance(data, list) else [],
                 "message": "당일 주문체결내역 조회 성공"
             }
-        except Exception as e:
-            return {"success": False, "message": f"주문체결내역 조회 오류: {e}"}
+        else:
+            return {"success": False, "message": f"주문체결내역 조회 오류: {err}"}
 
     # -----------------------------------------------------------------
     # 5. 종종이 당일 주문표 일괄 전송 파이프라인

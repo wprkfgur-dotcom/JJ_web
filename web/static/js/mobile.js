@@ -604,14 +604,9 @@ async function mOpenBrokerModal() {
       if (secInput) secInput.placeholder = '발급받은 APP SECRET 입력';
     }
 
-    if (cfg.last_status === 'SUCCESS' && cfg.last_message) {
-      if (resultBox) {
-        resultBox.style.display = 'block';
-        resultBox.style.background = 'rgba(16, 185, 129, 0.12)';
-        resultBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-        resultBox.style.color = '#34d399';
-        resultBox.innerHTML = `<strong>최근 연동 확인:</strong><br>${cfg.last_message}`;
-      }
+    if (resultBox) {
+      resultBox.style.display = 'none';
+      resultBox.innerHTML = '';
     }
 
     mOnAutoTradeToggleChange();
@@ -719,7 +714,7 @@ async function mHandleBrokerCheckAndSave() {
       resultBox.style.background = 'rgba(56, 189, 248, 0.12)';
       resultBox.style.border = '1px solid rgba(56, 189, 248, 0.3)';
       resultBox.style.color = 'var(--m-accent-cyan)';
-      resultBox.innerHTML = '메리츠 API 토큰 및 잔고 조회를 검증하고 있습니다...';
+      resultBox.innerHTML = '메리츠 API 연동 상태를 검증하고 있습니다...';
     }
 
     const res = await fetch(`/api/accounts/${mCurrentBrokerAccId}/broker/check-save`, {

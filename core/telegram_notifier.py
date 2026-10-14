@@ -189,3 +189,47 @@ def notify_order_generation(
 
     full_text = "\n".join(lines)
     return send_telegram_message(full_text)
+
+
+def notify_rest_api_call(
+    api_title: str,
+    method: str,
+    endpoint: str,
+    status_text: str,
+    success: bool,
+    details: Optional[Dict[str, Any]] = None,
+    error_msg: Optional[str] = None
+) -> Tuple[bool, str]:
+    """
+    Open API Rest API 호출 발생 시 텔레그램으로 즉시 상세 알림을 강제 전송합니다.
+    (모든 Open API Rest API 호출 래퍼 연동)
+    """
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    status_icon = "🟢" if success else "🔴"
+    clean_method = (method or "REST").upper().strip()
+
+    lines = [
+        f"<b>{status_icon} [Open API 호출] {api_title}</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━",
+        f"🌐 <b>API 경로</b>: <code>{clean_method} {endpoint}</code>",
+        f"📊 <b>호출 상태</b>: {'정상 완료 (SUCCESS)' if success else '오류 발생 (FAILED)'}",
+        f"💬 <b>응답 요약</b>: {status_text}"
+    ]
+
+    if details:
+        lines.append("")
+        lines.append("📋 <b>세부 내용</b>:")
+        for k, v in details.items():
+            if v is not None and str(v).strip() != "":
+                lines.append(f"  • {k}: <b>{v}</b>")
+
+    if error_msg and not success:
+        lines.append("")
+        lines.append(f"⚠️ <b>에러 코드/메시지</b>:\n<code>{error_msg}</code>")
+
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+    lines.append(f"⏰ <b>발생 일시</b>: {now_str}")
+
+    full_text = "\n".join(lines)
+    return send_telegram_message(full_text)
+

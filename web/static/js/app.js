@@ -1226,14 +1226,9 @@ async function openAccountBrokerModal(accId) {
       if (secInput) secInput.placeholder = '발급받은 APP SECRET 입력';
     }
 
-    if (cfg.last_status === 'SUCCESS' && cfg.last_message) {
-      if (resultBox) {
-        resultBox.style.display = 'block';
-        resultBox.style.background = 'rgba(16, 185, 129, 0.12)';
-        resultBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
-        resultBox.style.color = '#34d399';
-        resultBox.innerHTML = `<strong>최근 연동 확인 (${cfg.last_checked_at || ''}):</strong><br>${cfg.last_message}`;
-      }
+    if (resultBox) {
+      resultBox.style.display = 'none';
+      resultBox.innerHTML = '';
     }
 
     onAutoTradeToggleChange();
@@ -1368,7 +1363,7 @@ async function handleBrokerCheckAndSave() {
       resultBox.style.background = 'rgba(56, 189, 248, 0.12)';
       resultBox.style.border = '1px solid rgba(56, 189, 248, 0.3)';
       resultBox.style.color = 'var(--accent-cyan)';
-      resultBox.innerHTML = '메리츠증권 Open API에 접속하여 OAuth 토큰 및 외화 예수금 조회를 검증하고 있습니다...';
+      resultBox.innerHTML = '메리츠증권 Open API에 접속하여 연동 검증을 진행하고 있습니다...';
     }
 
     const res = await fetch(`/api/accounts/${currentBrokerAccId}/broker/check-save`, {
@@ -1389,7 +1384,7 @@ async function handleBrokerCheckAndSave() {
         resultBox.style.background = 'rgba(16, 185, 129, 0.15)';
         resultBox.style.border = '1px solid rgba(16, 185, 129, 0.4)';
         resultBox.style.color = '#34d399';
-        resultBox.innerHTML = `<strong>✅ 연동 검증 성공!</strong><br>${data.message || 'API가 정상 작동하며 키 값이 안전하게 암호화 저장되었습니다.'}`;
+        resultBox.innerHTML = `<strong>✅ 연동 검증 성공!</strong><br>메리츠증권 Open API 인증 및 암호화 저장이 완료되었습니다.`;
       }
       showToast('🎉 메리츠증권 연동 성공! 암호화 저장이 완료되었습니다.');
       

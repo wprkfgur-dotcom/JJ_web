@@ -952,6 +952,22 @@
           </div>
         </div>
 
+        <!-- 2-B. 텔레그램 실시간 알림 안내 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.9rem; background: rgba(15, 23, 42, 0.5); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div>
+            <div style="font-weight: 600; font-size: 0.85rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+              <span>📢</span>
+              <span>Open API 텔레그램 실시간 전송</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+              인증, 잔고조회, 주문/거래 등 모든 Rest API 호출 내역이 텔레그램으로 자동 전송됩니다.
+            </div>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.15); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 600; white-space: nowrap;">
+            실시간 전송 강제 (Active)
+          </span>
+        </div>
+
         <!-- 3-A. 키움증권 / 한국투자증권 선택 시: 구현 예정 안내 배너 -->
         <div id="broker-pending-banner" style="display: none; padding: 1.25rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-sm); text-align: center;">
           <div style="font-size: 2rem; margin-bottom: 0.5rem;">🚧</div>
@@ -1029,6 +1045,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.4.3.7"></script>
+  <script src="/static/js/app.js?v=2.4.4.0"></script>
 </body>
 </html>
