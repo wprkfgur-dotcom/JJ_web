@@ -730,7 +730,13 @@ async function openAccountDetailModal(accId, pushHistory = true) {
     const acc = data.account;
 
     if (headerTitle) {
-      headerTitle.textContent = `${acc.name} (${acc.ticker})`;
+      headerTitle.innerHTML = `
+        <span id="header-acc-name-text">${acc.name}</span>
+        <span style="font-size: 1.1rem; color: var(--text-muted); font-weight: 500;">(${acc.ticker})</span>
+        <button type="button" class="btn btn-secondary btn-xs" onclick="openRenameAccountModal('${acc.id}', '${acc.name.replace(/'/g, "\\'")}')" title="계좌명 변경" style="margin-left: 0.6rem; padding: 3px 8px; font-size: 0.775rem; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: var(--accent-cyan); font-weight: 600; cursor: pointer; border-radius: 4px; display: inline-flex; align-items: center; gap: 0.25rem;">
+          <span>✏️</span> 계좌명 변경
+        </button>
+      `;
     }
 
     if (subTitleEl) {
@@ -1166,8 +1172,22 @@ function renderDetailSubTabs(data) {
           <span class="badge badge-ticker">${acc.name}</span>
         </div>
 
-        <!-- 1. 기본 기간 & 위기준비금 & 수수료율 (2분할 상단 카드) -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
+        <!-- 1. 기본 기간 & 위기준비금 & 수수료율 (3분할 상단 카드) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem; margin-bottom: 1.25rem;">
+          <!-- 계좌 기본 정보 -->
+          <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
+            <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
+              <span>🏷️</span> 계좌 기본 정보
+            </div>
+            <div class="form-group">
+              <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>계좌명 (별칭)</span>
+                <span style="color: var(--accent-cyan); font-size: 0.72rem;">수정 가능</span>
+              </label>
+              <input type="text" id="sp-account-name" class="form-input" value="${acc.name}" placeholder="계좌명 입력" style="font-weight: 700; color: var(--accent-cyan); width: 100%; min-width: 0; box-sizing: border-box; padding: 0.45rem 0.6rem;">
+            </div>
+          </div>
+
           <!-- 기간 & 자산 배분 -->
           <div style="background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: var(--radius-sm); padding: 1.1rem;">
             <div style="font-weight: 700; color: #f59e0b; margin-bottom: 0.85rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.95rem;">
@@ -1176,7 +1196,7 @@ function renderDetailSubTabs(data) {
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
               <div class="form-group">
                 <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                  <span>보유일수 (만기)</span>
+                  <span>보유일수</span>
                   <span style="color: var(--text-muted); font-size: 0.72rem;">기준 10일</span>
                 </label>
                 <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -1187,7 +1207,7 @@ function renderDetailSubTabs(data) {
 
               <div class="form-group">
                 <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
-                  <span>위기준비금 비율</span>
+                  <span>위기준비금</span>
                   <span style="color: var(--text-muted); font-size: 0.72rem;">기준 5.00%</span>
                 </label>
                 <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -1318,6 +1338,7 @@ function renderDetailSubTabs(data) {
 }
 
 async function saveAccountStrategyParams(accId) {
+  const newName = (document.getElementById('sp-account-name')?.value || '').trim();
   const maxHold = parseInt(document.getElementById('sp-max-hold-days').value, 10);
   const reserveRatioPct = parseFloat(document.getElementById('sp-reserve-ratio').value);
   const feeRatePct = parseFloat(document.getElementById('sp-fee-rate').value);
@@ -1331,6 +1352,19 @@ async function saveAccountStrategyParams(accId) {
   if (isNaN(maxHold) || isNaN(normalSplits) || isNaN(safeSplits) || isNaN(riskoffSplits)) {
     showToast('모든 숫자 항목을 올바르게 입력해주세요.', 'error');
     return;
+  }
+
+  // 1. 계좌명이 입력되어 있으면 계좌 기본 정보 업데이트
+  if (newName) {
+    try {
+      await authFetch(`/api/accounts/${accId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+    } catch (err) {
+      console.warn('Account name update error:', err);
+    }
   }
 
   const payload = {
@@ -1353,7 +1387,7 @@ async function saveAccountStrategyParams(accId) {
     });
     const data = await res.json();
     if (data.success) {
-      showToast('전략 운용 변수가 저장되었으며 당일 주문표 및 LOC 목표가가 갱신되었습니다.', 'success');
+      showToast('계좌 정보 및 전략 운용 변수가 성공적으로 저장되었습니다.', 'success');
       await openAccountDetailModal(accId, false);
       loadAccounts(true);
     } else {
@@ -1364,6 +1398,51 @@ async function saveAccountStrategyParams(accId) {
   }
 }
 window.saveAccountStrategyParams = saveAccountStrategyParams;
+
+// -------------------------------------------------------------------
+// 계좌명 변경 전용 모달 (헤더 1클릭 변경용)
+// -------------------------------------------------------------------
+function openRenameAccountModal(accId, curName) {
+  const modal = document.getElementById('renameAccountModal');
+  if (!modal) return;
+  document.getElementById('rename-acc-id').value = accId;
+  const input = document.getElementById('rename-acc-name-input');
+  if (input) {
+    input.value = curName || '';
+  }
+  modal.classList.add('active');
+  modal.style.display = 'flex';
+  setTimeout(() => { if (input) input.focus(); }, 50);
+}
+window.openRenameAccountModal = openRenameAccountModal;
+
+async function submitRenameAccount() {
+  const accId = document.getElementById('rename-acc-id').value;
+  const newName = (document.getElementById('rename-acc-name-input').value || '').trim();
+  if (!newName) {
+    showToast('변경할 새 계좌명을 입력해주세요.', 'error');
+    return;
+  }
+  try {
+    const res = await authFetch(`/api/accounts/${accId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('계좌명이 성공적으로 변경되었습니다.', 'success');
+      closeModal('renameAccountModal');
+      await openAccountDetailModal(accId, false);
+      loadAccounts(true);
+    } else {
+      showToast(data.detail || '계좌명 변경에 실패했습니다.', 'error');
+    }
+  } catch (e) {
+    showToast('계좌명 변경 중 오류가 발생했습니다.', 'error');
+  }
+}
+window.submitRenameAccount = submitRenameAccount;
 
 // -------------------------------------------------------------------
 // 계좌 관련 제어 액션들

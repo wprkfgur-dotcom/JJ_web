@@ -1105,12 +1105,34 @@
     </div>
   </div>
 
+  <!-- Modal: 계좌명 변경 (Rename Account) -->
+  <div class="modal-overlay" id="renameAccountModal" style="display: none;" onclick="if(event.target===this) closeModal('renameAccountModal')">
+    <div class="modal-card" style="max-width: 440px; width: 100%; background: var(--bg-card); border-radius: var(--radius-md); box-shadow: 0 25px 50px rgba(0,0,0,0.6); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border-subtle); background: rgba(30, 41, 59, 0.4);">
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">✏️ 계좌명 변경</h3>
+        <button class="btn-close" onclick="closeModal('renameAccountModal')">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+        <input type="hidden" id="rename-acc-id">
+        <div class="form-group">
+          <label for="rename-acc-name-input" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:4px; display:block;">새 계좌명 *</label>
+          <input type="text" id="rename-acc-name-input" class="form-input" placeholder="예: SOXL 종종이 1호" style="font-size: 1rem; font-weight: 600;" onkeydown="if(event.key==='Enter') submitRenameAccount()">
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 1rem 1.5rem; display: flex; justify-content: flex-end; gap: 0.6rem; border-top: 1px solid var(--border-subtle);">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('renameAccountModal')">취소</button>
+        <button type="button" class="btn btn-primary" onclick="submitRenameAccount()">변경 저장</button>
+      </div>
+    </div>
+  </div>
+
+
   </div> <!-- /#app-view -->
 
   <!-- Toast 알림 컨테이너 -->
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.5.1"></script>
+  <script src="/static/js/app.js?v=2.5.2"></script>
 </body>
 </html>
