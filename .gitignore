@@ -33,6 +33,8 @@ env*/
 
 # Data caches & SQLite DB
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 
 # Live Account & User Data

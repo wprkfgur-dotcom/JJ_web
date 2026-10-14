@@ -21,29 +21,31 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DATA_DIR = os.path.join(BASE_DIR, "data")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")
+ACCOUNTS_DB_FILE = os.path.join(DATA_DIR, "accounts.db")
 
 
 class AccountManager:
     """
     다중 계좌 생성, 조회, 삭제, 입출금 관리 및 일일 실매매 운용(Next Day / 체결 정산 / Undo) 관리 클래스
+    SQLite3 (WAL 모드) 엔진 기반으로 동작하며, JSON 백업을 동시 유지합니다.
     """
 
-    def __init__(self, filepath: str = ACCOUNTS_FILE):
+    def __init__(self, filepath: str = ACCOUNTS_FILE, db_path: str = ACCOUNTS_DB_FILE):
         self.filepath = filepath
+        self.db_path = db_path
         self._ensure_storage()
 
     def _ensure_storage(self):
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        if not os.path.exists(self.filepath):
-            # 처음 시작 시 계좌가 없는 상태로 초기화
-            self.save_accounts([])
+        from core.account_db import init_db, migrate_from_json_if_needed
+        init_db(self.db_path)
+        # 기존 accounts.json 데이터가 존재하면 SQLite로 무손실 마이그레이션
+        migrate_from_json_if_needed(self.filepath, self.db_path)
 
     def load_accounts(self) -> list:
         try:
-            if not os.path.exists(self.filepath):
-                return []
-            with open(self.filepath, 'r', encoding='utf-8') as f:
-                accounts = json.load(f)
+            from core.account_db import load_all_accounts
+            accounts = load_all_accounts(self.db_path)
             # 미매도 슬롯의 실현손익 및 매도정보 정제 및 잔고/시드 동기화
             updated = False
             for acc in accounts:
@@ -59,7 +61,14 @@ class AccountManager:
                 self.save_accounts(accounts)
             return accounts
         except Exception as e:
-            print(f"계좌 파일 로드 중 오류: {e}")
+            print(f"계좌 DB 로드 중 오류: {e}")
+            # 폴백: JSON 로드
+            try:
+                if os.path.exists(self.filepath):
+                    with open(self.filepath, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+            except Exception:
+                pass
             return []
 
     def sync_account_balances(self, target: dict) -> bool:
@@ -124,17 +133,23 @@ class AccountManager:
         return changed
 
     def save_accounts(self, accounts: list):
-        """계좌 및 거래 일지 데이터를 서버 로컬 스토리지에 안전하게 영구 저장 (자동 백업 포함)"""
-        tmp_file = f"{self.filepath}.tmp"
-        with open(tmp_file, 'w', encoding='utf-8') as f:
-            json.dump(accounts, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_file, self.filepath)
+        """계좌 및 거래 일지 데이터를 SQLite3 데이터베이스에 원자적(ACID)으로 저장 및 JSON 자동 백업"""
+        from core.account_db import save_all_accounts
+
+        # 1. Primary 저장소: SQLite3 (WAL 모드 트랜잭션)
+        save_all_accounts(accounts, self.db_path)
+
+        # 2. Secondary 저장소: 안전한 JSON 자동 백업
         try:
+            tmp_file = f"{self.filepath}.tmp"
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(accounts, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, self.filepath)
             backup_file = self.filepath.replace("accounts.json", "accounts.backup.json")
             with open(backup_file, 'w', encoding='utf-8') as f:
                 json.dump(accounts, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as ex:
+            print(f"[JSON Backup Warning] {ex}")
 
     def add_account(self, name: str, strategy: str, ticker: str, start_date: str, initial_seed: float, memo: str = "",
                     trade_records: list = None, adjustments: list = None, current_date: str = None, operational_state: str = None,
