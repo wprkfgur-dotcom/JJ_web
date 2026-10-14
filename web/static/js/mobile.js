@@ -446,6 +446,10 @@ function renderMobileRecords(container, data) {
   const reversed = enriched.slice().reverse();
 
   container.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;padding:0 2px;">
+      <span style="font-size:0.75rem;font-weight:700;color:var(--m-text-primary);">📜 매매일지 (총 ${reversed.length}건)</span>
+      <span style="font-size:0.7rem;color:var(--m-accent-cyan);background:rgba(6,182,212,0.12);padding:2px 7px;border-radius:10px;font-weight:600;">👈 좌우로 밀어서 확인 👉</span>
+    </div>
     <div class="jj-journal-wrapper">
       <table class="jj-journal-table">
         <thead>

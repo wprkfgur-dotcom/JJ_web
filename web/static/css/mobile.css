@@ -31,14 +31,23 @@
   --m-safe-top: env(safe-area-inset-top, 0px);
 }
 
-* {
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
+  width: 100%;
+  max-width: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Inter", Roboto, sans-serif;
   background-color: var(--m-bg-main);
   background-image: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.12) 0%, transparent 60%);
@@ -50,6 +59,7 @@ body {
   padding-bottom: calc(75px + var(--m-safe-bottom));
   padding-top: var(--m-safe-top);
   overflow-x: hidden;
+  position: relative;
 }
 
 /* =====================================================================
@@ -59,6 +69,9 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background: var(--m-bg-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -174,14 +187,21 @@ body {
    Page Container & Views
    ===================================================================== */
 .m-container {
-  padding: 0.9rem 1rem;
+  padding: 0.85rem 0.85rem;
+  width: 100%;
   max-width: 600px;
   margin: 0 auto;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .m-view-section {
   display: none;
   animation: mFadeIn 0.25s ease-out;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .m-view-section.active {
@@ -197,12 +217,16 @@ body {
    Cards & Summaries
    ===================================================================== */
 .m-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background: var(--m-bg-card);
   border: 1px solid var(--m-border-subtle);
   border-radius: var(--m-radius-md);
-  padding: 1rem;
+  padding: 1rem 0.9rem;
   margin-bottom: 0.9rem;
   box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  overflow: hidden;
 }
 
 .m-card-header {
@@ -210,6 +234,9 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .m-card-title {
@@ -219,15 +246,23 @@ body {
   align-items: center;
   gap: 0.4rem;
   color: var(--m-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .m-portfolio-hero {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   background: linear-gradient(135deg, rgba(30, 58, 138, 0.35) 0%, rgba(15, 23, 42, 0.9) 100%);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: var(--m-radius-lg);
   padding: 1.2rem 1.1rem;
   margin-bottom: 1rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 20px rgba(59, 130, 246, 0.15);
+  overflow: hidden;
 }
 
 .m-hero-label {
@@ -242,6 +277,9 @@ body {
   letter-spacing: -0.03em;
   margin: 0.2rem 0;
   color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .m-hero-profit {
@@ -250,25 +288,35 @@ body {
   gap: 0.5rem;
   font-size: 0.9rem;
   font-weight: 700;
+  flex-wrap: wrap;
 }
 
 .m-grid-2x2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
   margin-top: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .m-sub-stat {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid var(--m-border-subtle);
   border-radius: var(--m-radius-sm);
-  padding: 0.65rem 0.75rem;
+  padding: 0.6rem 0.65rem;
+  overflow: hidden;
 }
 
 .m-sub-stat-label {
   font-size: 0.725rem;
   color: var(--m-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .m-sub-stat-val {
@@ -276,6 +324,9 @@ body {
   font-weight: 700;
   margin-top: 0.15rem;
   color: var(--m-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* =====================================================================
@@ -302,12 +353,18 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.6rem;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .m-acc-name-group {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .m-ticker-badge {
@@ -317,12 +374,17 @@ body {
   color: #fff;
   padding: 0.2rem 0.5rem;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .m-acc-name {
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--m-text-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .m-strat-tag {
@@ -331,6 +393,8 @@ body {
   background: rgba(6, 182, 212, 0.12);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .m-acc-metrics {
@@ -395,6 +459,16 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.m-order-card > div:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .m-order-card.buy {
@@ -408,18 +482,26 @@ body {
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--m-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .m-order-detail {
   font-size: 0.75rem;
   color: var(--m-text-secondary);
   margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .m-order-price {
   text-align: right;
   font-size: 0.95rem;
   font-weight: 800;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* =====================================================================
@@ -427,9 +509,11 @@ body {
    ===================================================================== */
 .m-btn {
   width: 100%;
-  padding: 0.75rem 1rem;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.75rem 0.85rem;
   border-radius: var(--m-radius-md);
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 700;
   border: none;
   cursor: pointer;
@@ -438,6 +522,10 @@ body {
   justify-content: center;
   gap: 0.4rem;
   transition: all 0.15s ease;
+  word-break: keep-all;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
 }
 
 .m-btn:active {
@@ -462,7 +550,7 @@ body {
 }
 
 .m-btn-sm {
-  padding: 0.4rem 0.75rem;
+  padding: 0.4rem 0.65rem;
   font-size: 0.775rem;
   border-radius: var(--m-radius-sm);
   width: auto;
@@ -470,6 +558,8 @@ body {
 
 .m-form-group {
   margin-bottom: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .m-form-label {
@@ -482,6 +572,8 @@ body {
 
 .m-form-input {
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid var(--m-border-subtle);
   border-radius: var(--m-radius-sm);
@@ -490,6 +582,20 @@ body {
   font-size: 0.9rem;
   outline: none;
 }
+
+input[type="date"].m-form-input {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.4rem;
+  font-size: 0.775rem;
+}
+
+input[type="number"].m-form-input {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .m-form-input:focus {
   border-color: var(--m-accent-blue);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
@@ -551,8 +657,10 @@ body {
   border: 1px solid var(--m-border-subtle);
   width: 100%;
   max-width: 600px;
+  box-sizing: border-box;
   max-height: 85vh;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 1.25rem 1rem calc(1.5rem + var(--m-safe-bottom));
   animation: sheetSlideUp 0.25s ease-out;
 }
@@ -625,8 +733,13 @@ body {
 
 /* JJ Journal Table on Mobile */
 .jj-journal-wrapper {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: #080f20;
@@ -635,6 +748,7 @@ body {
 
 .jj-journal-table {
   width: 100%;
+  min-width: 720px;
   border-collapse: collapse;
   font-size: 0.775rem;
   text-align: left;

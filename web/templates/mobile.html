@@ -18,7 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   
   <!-- Mobile Stylesheet -->
-  <link rel="stylesheet" href="/static/css/mobile.css?v=2.4.3.7">
+  <link rel="stylesheet" href="/static/css/mobile.css?v=2.5.6">
   
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -72,7 +72,7 @@
         <span class="m-brand-title">JJ INVEST</span>
       </a>
       <div class="m-header-actions">
-        <span id="m-header-user-name" style="font-size:0.8rem;color:var(--m-text-secondary);font-weight:600;"></span>
+        <span id="m-header-user-name" style="font-size:0.8rem;color:var(--m-text-secondary);font-weight:600;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
         <button type="button" class="m-icon-btn" onclick="mLogout()" title="로그아웃">🚪</button>
       </div>
     </header>
@@ -189,7 +189,7 @@
         </div>
 
         <!-- 서브탭 컨텐츠 영역 -->
-        <div id="m-detail-content-area" style="min-height:160px;margin-bottom:1rem;">
+        <div id="m-detail-content-area" style="min-height:160px;margin-bottom:1rem;width:100%;max-width:100%;box-sizing:border-box;overflow-x:hidden;">
           <!-- Orders / Unsold / Records rendered via JS -->
         </div>
 
@@ -250,14 +250,14 @@
             <button type="button" class="m-chip active" onclick="mSetBtPeriod(3)">최근 3년</button>
             <button type="button" class="m-chip" onclick="mSetBtPeriod(5)">최근 5년</button>
           </div>
-          <div style="display:flex;gap:0.4rem;">
-            <input type="date" id="m-bt-start" class="m-form-input" style="flex:1;">
-            <input type="date" id="m-bt-end" class="m-form-input" style="flex:1;">
+          <div style="display:flex;gap:0.4rem;width:100%;box-sizing:border-box;">
+            <input type="date" id="m-bt-start" class="m-form-input" style="flex:1;min-width:0;width:100%;box-sizing:border-box;">
+            <input type="date" id="m-bt-end" class="m-form-input" style="flex:1;min-width:0;width:100%;box-sizing:border-box;">
           </div>
         </div>
 
         <!-- 종종이 전략 변수 설정창 (모바일) -->
-        <div style="background: rgba(15, 23, 42, 0.45); border: 1px solid var(--m-border); border-radius: 8px; padding: 0.85rem; margin-bottom: 0.85rem;">
+        <div style="background: rgba(15, 23, 42, 0.45); border: 1px solid var(--m-border); border-radius: 8px; padding: 0.85rem; margin-bottom: 0.85rem; width:100%; box-sizing:border-box; overflow:hidden;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; padding-bottom:0.4rem; border-bottom:1px solid rgba(255,255,255,0.06);">
             <div style="font-size:0.85rem; font-weight:700; color:var(--m-accent-cyan);">
               ⚙️ 종종이 전략 설정 (맞춤 인자)
@@ -267,68 +267,70 @@
             </button>
           </div>
 
-          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:0.4rem; margin-bottom:0.6rem;">
-            <div>
-              <label style="font-size:0.68rem; color:var(--m-text-secondary); display:block; margin-bottom:2px;">보유일수</label>
-              <div style="display:flex; align-items:center; gap:2px;">
-                <input type="number" id="m-bt-jj-hold-days" class="m-form-input" value="10" min="1" max="60" style="padding:0.35rem 0.4rem; font-size:0.75rem; text-align:right;">
-                <span style="font-size:0.68rem; color:var(--m-text-muted);">일</span>
+          <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:0.4rem; margin-bottom:0.6rem; width:100%; box-sizing:border-box;">
+            <div style="min-width:0;">
+              <label style="font-size:0.68rem; color:var(--m-text-secondary); display:block; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">보유일수</label>
+              <div style="display:flex; align-items:center; gap:2px; min-width:0;">
+                <input type="number" id="m-bt-jj-hold-days" class="m-form-input" value="10" min="1" max="60" style="padding:0.35rem 0.25rem; font-size:0.75rem; text-align:right; min-width:0; width:100%; box-sizing:border-box;">
+                <span style="font-size:0.68rem; color:var(--m-text-muted); flex-shrink:0;">일</span>
               </div>
             </div>
-            <div>
-              <label style="font-size:0.68rem; color:var(--m-text-secondary); display:block; margin-bottom:2px;">위기준비(AK)</label>
-              <div style="display:flex; align-items:center; gap:2px;">
-                <input type="number" id="m-bt-jj-reserve-ratio" class="m-form-input" value="5.00" min="0" max="50" step="0.5" style="padding:0.35rem 0.4rem; font-size:0.75rem; text-align:right;">
-                <span style="font-size:0.68rem; color:var(--m-text-muted);">%</span>
+            <div style="min-width:0;">
+              <label style="font-size:0.68rem; color:var(--m-text-secondary); display:block; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">위기준비(AK)</label>
+              <div style="display:flex; align-items:center; gap:2px; min-width:0;">
+                <input type="number" id="m-bt-jj-reserve-ratio" class="m-form-input" value="5.00" min="0" max="50" step="0.5" style="padding:0.35rem 0.25rem; font-size:0.75rem; text-align:right; min-width:0; width:100%; box-sizing:border-box;">
+                <span style="font-size:0.68rem; color:var(--m-text-muted); flex-shrink:0;">%</span>
               </div>
             </div>
-            <div>
-              <label style="font-size:0.68rem; color:var(--m-text-secondary); display:block; margin-bottom:2px;">수수료율</label>
-              <div style="display:flex; align-items:center; gap:2px;">
-                <input type="number" id="m-bt-jj-fee-rate" class="m-form-input" value="0.000" min="0" max="2" step="0.005" style="padding:0.35rem 0.4rem; font-size:0.75rem; text-align:right;">
-                <span style="font-size:0.68rem; color:var(--m-text-muted);">%</span>
+            <div style="min-width:0;">
+              <label style="font-size:0.68rem; color:var(--m-text-secondary); display:block; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">수수료율</label>
+              <div style="display:flex; align-items:center; gap:2px; min-width:0;">
+                <input type="number" id="m-bt-jj-fee-rate" class="m-form-input" value="0.000" min="0" max="2" step="0.005" style="padding:0.35rem 0.25rem; font-size:0.75rem; text-align:right; min-width:0; width:100%; box-sizing:border-box;">
+                <span style="font-size:0.68rem; color:var(--m-text-muted); flex-shrink:0;">%</span>
               </div>
             </div>
           </div>
 
-          <table style="width:100%; border-collapse:collapse; font-size:0.75rem;">
-            <thead>
-              <tr style="background:rgba(15,23,42,0.8); border-bottom:1px solid rgba(255,255,255,0.06);">
-                <th style="padding:4px 6px; text-align:left;">모드</th>
-                <th style="padding:4px 6px; text-align:center;">목표익절(%)</th>
-                <th style="padding:4px 6px; text-align:center;">분할수(조각)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(16,185,129,0.04);">
-                <td style="padding:4px 6px; font-weight:700; color:#10b981;">Normal</td>
-                <td style="padding:4px 6px; text-align:center;">
-                  <input type="number" id="m-bt-jj-normal-yield" class="m-form-input" value="2.75" step="0.05" style="padding:0.25rem 0.4rem; font-size:0.75rem; text-align:right; width:65px; display:inline-block;">
-                </td>
-                <td style="padding:4px 6px; text-align:center;">
-                  <input type="number" id="m-bt-jj-normal-splits" class="m-form-input" value="8" step="1" style="padding:0.25rem 0.4rem; font-size:0.75rem; text-align:right; width:55px; display:inline-block;">
-                </td>
-              </tr>
-              <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(56,189,248,0.04);">
-                <td style="padding:4px 6px; font-weight:700; color:#38bdf8;">Safe</td>
-                <td style="padding:4px 6px; text-align:center;">
-                  <input type="number" id="m-bt-jj-safe-yield" class="m-form-input" value="0.25" step="0.05" style="padding:0.25rem 0.4rem; font-size:0.75rem; text-align:right; width:65px; display:inline-block;">
-                </td>
-                <td style="padding:4px 6px; text-align:center;">
-                  <input type="number" id="m-bt-jj-safe-splits" class="m-form-input" value="7" step="1" style="padding:0.25rem 0.4rem; font-size:0.75rem; text-align:right; width:55px; display:inline-block;">
-                </td>
-              </tr>
-              <tr style="background:rgba(244,63,94,0.04);">
-                <td style="padding:4px 6px; font-weight:700; color:#f43f5e;">Riskoff</td>
-                <td style="padding:4px 6px; text-align:center;">
-                  <input type="number" id="m-bt-jj-riskoff-yield" class="m-form-input" value="0.70" step="0.05" style="padding:0.25rem 0.4rem; font-size:0.75rem; text-align:right; width:65px; display:inline-block;">
-                </td>
-                <td style="padding:4px 6px; text-align:center;">
-                  <input type="number" id="m-bt-jj-riskoff-splits" class="m-form-input" value="5" step="1" style="padding:0.25rem 0.4rem; font-size:0.75rem; text-align:right; width:55px; display:inline-block;">
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div style="width:100%; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; box-sizing:border-box;">
+            <table style="width:100%; min-width:270px; border-collapse:collapse; font-size:0.75rem;">
+              <thead>
+                <tr style="background:rgba(15,23,42,0.8); border-bottom:1px solid rgba(255,255,255,0.06);">
+                  <th style="padding:4px 6px; text-align:left;">모드</th>
+                  <th style="padding:4px 6px; text-align:center;">목표익절(%)</th>
+                  <th style="padding:4px 6px; text-align:center;">분할수(조각)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(16,185,129,0.04);">
+                  <td style="padding:4px 6px; font-weight:700; color:#10b981;">Normal</td>
+                  <td style="padding:4px 6px; text-align:center;">
+                    <input type="number" id="m-bt-jj-normal-yield" class="m-form-input" value="2.75" step="0.05" style="padding:0.25rem 0.35rem; font-size:0.75rem; text-align:right; width:58px; display:inline-block;">
+                  </td>
+                  <td style="padding:4px 6px; text-align:center;">
+                    <input type="number" id="m-bt-jj-normal-splits" class="m-form-input" value="8" step="1" style="padding:0.25rem 0.35rem; font-size:0.75rem; text-align:right; width:50px; display:inline-block;">
+                  </td>
+                </tr>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(56,189,248,0.04);">
+                  <td style="padding:4px 6px; font-weight:700; color:#38bdf8;">Safe</td>
+                  <td style="padding:4px 6px; text-align:center;">
+                    <input type="number" id="m-bt-jj-safe-yield" class="m-form-input" value="0.25" step="0.05" style="padding:0.25rem 0.35rem; font-size:0.75rem; text-align:right; width:58px; display:inline-block;">
+                  </td>
+                  <td style="padding:4px 6px; text-align:center;">
+                    <input type="number" id="m-bt-jj-safe-splits" class="m-form-input" value="7" step="1" style="padding:0.25rem 0.35rem; font-size:0.75rem; text-align:right; width:50px; display:inline-block;">
+                  </td>
+                </tr>
+                <tr style="background:rgba(244,63,94,0.04);">
+                  <td style="padding:4px 6px; font-weight:700; color:#f43f5e;">Riskoff</td>
+                  <td style="padding:4px 6px; text-align:center;">
+                    <input type="number" id="m-bt-jj-riskoff-yield" class="m-form-input" value="0.70" step="0.05" style="padding:0.25rem 0.35rem; font-size:0.75rem; text-align:right; width:58px; display:inline-block;">
+                  </td>
+                  <td style="padding:4px 6px; text-align:center;">
+                    <input type="number" id="m-bt-jj-riskoff-splits" class="m-form-input" value="5" step="1" style="padding:0.25rem 0.35rem; font-size:0.75rem; text-align:right; width:50px; display:inline-block;">
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <!-- 비교 전략 안내 (모바일) -->
@@ -644,6 +646,6 @@
   <div class="m-toast" id="m-toast-box"></div>
 
   <!-- Mobile JavaScript -->
-  <script src="/static/js/mobile.js?v=2.5.3"></script>
+  <script src="/static/js/mobile.js?v=2.5.6"></script>
 </body>
 </html>
