@@ -15,12 +15,9 @@ _FAILED_EXACT_DATES = set()
 
 
 def get_db_path() -> str:
-    """모바일 및 데스크톱 환경에 맞는 SQLite DB 파일 경로를 반환합니다."""
-    storage_base = os.environ.get("FLET_APP_STORAGE_DATA")
-    if not storage_base:
-        cur_dir = os.path.dirname(os.path.abspath(__file__))
-        storage_base = os.path.dirname(cur_dir)
-    data_dir = os.path.join(storage_base, "data")
+    """서버 로컬 SQLite 시세 캐시 DB 파일 경로를 반환합니다."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(base_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
     return os.path.join(data_dir, "market_data.db")
 

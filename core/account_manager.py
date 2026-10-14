@@ -4,7 +4,6 @@
 미국 증시 개장일 캘린더를 연동하여 Next Day(다음 거래일) 진행, 당일 종가 및 체결 정산,
 일지 수정 및 마지막 거래일 삭제(Undo) 기능을 제공합니다.
 """
-import sys
 import os
 import json
 import uuid
@@ -18,14 +17,7 @@ from core.order_netting import calculate_order_netting, generate_jongjong_orders
 from core.market_calendar import get_next_trading_day, parse_date
 from core.strategy_registry import get_target_yield
 
-if os.environ.get("FLET_APP_STORAGE_DATA"):
-    # Flet 모바일 (Android/iOS) 전용 영구 저장소 디렉터리
-    BASE_DIR = os.environ.get("FLET_APP_STORAGE_DATA")
-elif getattr(sys, 'frozen', False):
-    # PyInstaller 실행 파일(.exe)이 위치한 실제 폴더 기준
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DATA_DIR = os.path.join(BASE_DIR, "data")
 ACCOUNTS_FILE = os.path.join(DATA_DIR, "accounts.json")

@@ -6,13 +6,12 @@ import sys
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-APP_CODE_DIR = BASE_DIR / "app_code"
-DATA_DIR = APP_CODE_DIR / "data"
+DATA_DIR = BASE_DIR / "data"
 STATIC_DIR = BASE_DIR / "web" / "static"
 TEMPLATE_DIR = BASE_DIR / "web" / "templates"
 
-if str(APP_CODE_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_CODE_DIR))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 # data 디렉터리 및 accounts.json 초기 확인
 DATA_DIR.mkdir(parents=True, exist_ok=True)

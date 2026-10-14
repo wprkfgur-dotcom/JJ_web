@@ -34,14 +34,12 @@ env*/
 # Data caches & SQLite DB
 *.db
 *.sqlite3
-data/market_data.db
-app_code/data/market_data.db
 
 # Live Account & User Data
 # accounts.json
-app_code/data/sessions.json
-app_code/data/users.json
-app_code/data/telegram_config.json
+data/sessions.json
+data/users.json
+data/telegram_config.json
 
 # Operating System & IDE
 .DS_Store
@@ -49,3 +47,8 @@ Thumbs.db
 .idea/
 .vscode/
 .agents/
+
+data/accounts.json
+data/accounts.backup.json
+data/accounts.json.tmp
+data/cloud_sync_config.json

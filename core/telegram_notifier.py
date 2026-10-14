@@ -7,18 +7,12 @@
 =====================================================================
 """
 import os
-import sys
 import json
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple, List
 import requests
 
-if os.environ.get("FLET_APP_STORAGE_DATA"):
-    BASE_DIR = os.environ.get("FLET_APP_STORAGE_DATA")
-elif getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DATA_DIR = os.path.join(BASE_DIR, "data")
 CONFIG_FILE = os.path.join(DATA_DIR, "telegram_config.json")
