@@ -222,6 +222,70 @@ class AccountManager:
             return True
         return False
 
+    def get_account_broker_config(self, acc_id: str) -> dict:
+        """
+        계좌별 자동매매 브로커 설정 안전 조회 (암호화된 시크릿 키는 제외하고 마스킹된 정보만 반환)
+        """
+        accounts = self.load_accounts()
+        target = next((a for a in accounts if a['id'] == acc_id), None)
+        if not target:
+            return None
+
+        cfg = target.get('auto_trade', {})
+        has_creds = bool(cfg.get('app_key_enc') and cfg.get('app_secret_enc'))
+        return {
+            'account_id': acc_id,
+            'account_name': target.get('name'),
+            'ticker': target.get('ticker'),
+            'enabled': bool(cfg.get('enabled', False)),
+            'broker': cfg.get('broker', 'meritz'),
+            'has_credentials': has_creds,
+            'app_key_masked': cfg.get('app_key_masked', ''),
+            'last_checked_at': cfg.get('last_checked_at'),
+            'last_status': cfg.get('last_status'),
+            'last_message': cfg.get('last_message', '')
+        }
+
+    def save_account_broker_config(self, acc_id: str, broker: str, enabled: bool,
+                                   app_key: str = None, app_secret: str = None,
+                                   check_status: str = "SUCCESS", check_message: str = "") -> dict:
+        """
+        계좌별 자동매매 브로커 설정 저장.
+        제공된 App Key와 App Secret을 대칭키로 안전하게 암호화하여 계좌에 영구 저장합니다.
+        """
+        from core.security import encrypt_credential, mask_credential
+
+        accounts = self.load_accounts()
+        target = next((a for a in accounts if a['id'] == acc_id), None)
+        if not target:
+            return None
+
+        cur_cfg = target.setdefault('auto_trade', {})
+        app_key_enc = cur_cfg.get('app_key_enc', '')
+        app_secret_enc = cur_cfg.get('app_secret_enc', '')
+        app_key_masked = cur_cfg.get('app_key_masked', '')
+
+        # 새로운 키가 입력된 경우 암호화하여 갱신
+        if app_key and app_key.strip():
+            app_key_enc = encrypt_credential(app_key.strip())
+            app_key_masked = mask_credential(app_key.strip())
+        if app_secret and app_secret.strip():
+            app_secret_enc = encrypt_credential(app_secret.strip())
+
+        target['auto_trade'] = {
+            'enabled': bool(enabled),
+            'broker': broker.lower().strip() if broker else 'meritz',
+            'app_key_enc': app_key_enc,
+            'app_secret_enc': app_secret_enc,
+            'app_key_masked': app_key_masked,
+            'last_checked_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'last_status': check_status,
+            'last_message': check_message
+        }
+
+        self.save_accounts(accounts)
+        return self.get_account_broker_config(acc_id)
+
     def export_trade_records_csv(self, acc_id: str, file_path: str) -> bool:
         """
         계좌의 매매 일지(trade_records) 및 상세 지표를 CSV 파일로 저장합니다.

@@ -11,6 +11,7 @@ from ..schemas import (
     CreateAccountRequest,
     SettlementRequest,
     UpdateAccountRequest,
+    AccountBrokerConfigRequest,
 )
 from ..utils import current_username, get_owned_account, sanitize_for_json
 
@@ -69,6 +70,14 @@ def _summarize_account(acc: dict, owner: str):
         "has_orders": bool(buy_orders or sell_orders),
         "buy_orders": buy_orders,
         "sell_orders": sell_orders,
+        "auto_trade": {
+            "enabled": bool(acc.get("auto_trade", {}).get("enabled", False)),
+            "broker": acc.get("auto_trade", {}).get("broker", "meritz"),
+            "has_credentials": bool(acc.get("auto_trade", {}).get("app_key_enc")),
+            "app_key_masked": acc.get("auto_trade", {}).get("app_key_masked", ""),
+            "last_status": acc.get("auto_trade", {}).get("last_status", ""),
+            "last_message": acc.get("auto_trade", {}).get("last_message", "")
+        },
     }
     return item, asset, cash, seed
 
@@ -287,3 +296,111 @@ async def undo_last_trade(acc_id: str, request: Request):
     if not am.delete_last_trade_record(acc_id):
         raise HTTPException(status_code=400, detail="Cannot undo last record")
     return {"success": True}
+
+
+@router.get("/{acc_id}/broker")
+async def get_account_broker(acc_id: str, request: Request):
+    """계좌별 자동매매 브로커 설정 조회 (소유자 검증)"""
+    get_owned_account(acc_id, request, "본인의 계좌만 브로커 설정 조회가 가능합니다.")
+    cfg = am.get_account_broker_config(acc_id)
+    if not cfg:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return {"success": True, "config": cfg}
+
+
+@router.post("/{acc_id}/broker")
+async def save_account_broker(acc_id: str, req: AccountBrokerConfigRequest, request: Request):
+    """계좌별 자동매매 On/Off 및 브로커 선택 저장 (소유자 검증)"""
+    get_owned_account(acc_id, request, "본인의 계좌만 브로커 설정 저장이 가능합니다.")
+    broker_name = (req.broker or "meritz").lower().strip()
+
+    if broker_name in ("kiwoom", "kis"):
+        # 키움증권 / 한국투자증권은 구현 예정
+        cfg = am.save_account_broker_config(
+            acc_id=acc_id,
+            broker=broker_name,
+            enabled=req.enabled,
+            check_status="PENDING",
+            check_message="구현 예정입니다."
+        )
+        return {
+            "success": True,
+            "message": f"{'키움증권' if broker_name == 'kiwoom' else '한국투자증권'}은 구현 예정입니다.",
+            "config": cfg,
+            "is_pending": True
+        }
+
+    cfg = am.save_account_broker_config(
+        acc_id=acc_id,
+        broker=broker_name,
+        enabled=req.enabled
+    )
+    return {"success": True, "message": "자동매매 설정이 저장되었습니다.", "config": cfg}
+
+
+@router.post("/{acc_id}/broker/check-save")
+async def check_and_save_broker(acc_id: str, req: AccountBrokerConfigRequest, request: Request):
+    """
+    증권사 Open API 연동 검증 및 검증 성공 시 키 암호화 안전 저장 (Check & Save)
+    """
+    target = get_owned_account(acc_id, request, "본인의 계좌만 브로커 연동 설정이 가능합니다.")
+    broker_name = (req.broker or "meritz").lower().strip()
+
+    # 1. 키움 / 한국투자증권 선택 시
+    if broker_name in ("kiwoom", "kis"):
+        broker_kr = "키움증권" if broker_name == "kiwoom" else "한국투자증권"
+        return {
+            "success": False,
+            "message": f"'{broker_kr}' 연동은 현재 구현 예정입니다.",
+            "is_pending": True
+        }
+
+    # 2. 메리츠증권 Open API 검증
+    if broker_name == "meritz":
+        from core.meritz_client import MeritzClient
+        from core.security import decrypt_credential
+
+        app_key = (req.app_key or "").strip()
+        app_secret = (req.app_secret or "").strip()
+
+        # 새로 입력되지 않고 기존 등록된 키가 있는 경우 복호화하여 테스트 지원
+        cur_cfg = target.get("auto_trade", {})
+        if not app_key and cur_cfg.get("app_key_enc"):
+            app_key = decrypt_credential(cur_cfg.get("app_key_enc", ""))
+        if not app_secret and cur_cfg.get("app_secret_enc"):
+            app_secret = decrypt_credential(cur_cfg.get("app_secret_enc", ""))
+
+        if not app_key or not app_secret:
+            raise HTTPException(
+                status_code=400,
+                detail="메리츠증권 APP KEY와 APP SECRET을 모두 입력해 주세요."
+            )
+
+        # 실제 메리츠 Open API(토큰 발급 + 해외주식 잔고조회) 호출 검증
+        ok, msg, data = MeritzClient.verify_credentials(app_key=app_key, app_secret=app_secret)
+        if not ok:
+            return {
+                "success": False,
+                "message": msg
+            }
+
+        # 검증 성공 시 대칭키 암호화하여 영구 저장
+        saved_cfg = am.save_account_broker_config(
+            acc_id=acc_id,
+            broker="meritz",
+            enabled=req.enabled,
+            app_key=app_key,
+            app_secret=app_secret,
+            check_status="SUCCESS",
+            check_message=msg
+        )
+
+        return {
+            "success": True,
+            "message": msg,
+            "data": data,
+            "config": saved_cfg
+        }
+
+    raise HTTPException(status_code=400, detail="지원되지 않는 증권사입니다.")
+

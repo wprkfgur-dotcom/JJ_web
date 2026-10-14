@@ -95,6 +95,52 @@ class MeritzClient:
         """App Key 및 App Secret 설정 여부 확인"""
         return bool(self.config.get("app_key") and self.config.get("app_secret"))
 
+    @classmethod
+    def verify_credentials(cls, app_key: str, app_secret: str) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        주어진 App Key와 App Secret으로 메리츠 Open API(토큰 발급 + 해외주식 잔고조회)를
+        실제 호출하여 자격증명이 올바른지 검증합니다.
+        """
+        key = (app_key or "").strip()
+        sec = (app_secret or "").strip()
+        if not key or not sec:
+            return False, "App Key와 App Secret을 모두 입력해 주세요.", {}
+
+        # 인메모리 검증용 임시 인스턴스 생성
+        client = cls(config_path="/dev/null")
+        client.config = {
+            "app_key": key,
+            "app_secret": sec,
+            "is_simulation": False,
+            "enabled": True
+        }
+
+        # 1. OAuth 토큰 발급 테스트
+        ok, token = client.get_access_token(force_refresh=True)
+        if not ok:
+            return False, f"메리츠 토큰 발급 실패: {token}", {}
+
+        # 2. 해외주식 외화 예수금/잔고 조회 테스트
+        bal_res = client.get_overseas_currencies()
+        if not bal_res.get("success"):
+            msg = bal_res.get("message", "잔고 조회 실패")
+            return False, f"메리츠 토큰은 발급되었으나 잔고 조회 실패: {msg}", {}
+
+        usd_dep = bal_res.get("usd_deposit", 0.0)
+        total_asset = bal_res.get("usd_total_asset", 0.0)
+        ex_rate = bal_res.get("exchange_rate", 0.0)
+
+        msg = f"메리츠증권 연동 성공! (외화 예수금: ${usd_dep:,.2f}"
+        if total_asset > 0:
+            msg += f", 총 자산: ${total_asset:,.2f}"
+        msg += ")"
+
+        return True, msg, {
+            "usd_deposit": usd_dep,
+            "usd_total_asset": total_asset,
+            "exchange_rate": ex_rate
+        }
+
     # -----------------------------------------------------------------
     # 1. 인증 및 토큰 관리 (OAuth 2.0)
     # -----------------------------------------------------------------

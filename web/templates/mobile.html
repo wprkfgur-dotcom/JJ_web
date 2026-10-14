@@ -198,6 +198,9 @@
           <button class="m-btn m-btn-primary" onclick="mAdvanceDay()">
             🚀 다음 영업일 진행 (주문표 생성 & 텔레그램 알림)
           </button>
+          <button class="m-btn m-btn-secondary" onclick="mOpenBrokerModal()" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: var(--m-accent-cyan); font-weight: 600;">
+            🤖 계좌 자동매매 & 브로커 연동 설정
+          </button>
           <div style="display:flex;gap:0.5rem;">
             <button class="m-btn m-btn-success" style="flex:1;" onclick="mOpenSettlementModal()">
               ✅ 장마감 정산 입력
@@ -473,6 +476,80 @@
           정산 확정하기
         </button>
       </form>
+    </div>
+  </div>
+
+  <!-- =============================================================== -->
+  <!-- MODAL: 모바일 계좌별 자동매매 & 브로커 연동 바텀시트           -->
+  <!-- =============================================================== -->
+  <div class="m-modal-overlay" id="m-modal-broker" style="display:none;" onclick="if(event.target===this) mCloseModal('m-modal-broker')">
+    <div class="m-bottom-sheet" style="max-height: 85vh; overflow-y: auto;">
+      <div class="m-sheet-header">
+        <span class="m-sheet-title" id="m-broker-sheet-title">🤖 계좌 자동매매 설정</span>
+        <button class="m-sheet-close" onclick="mCloseModal('m-modal-broker')">×</button>
+      </div>
+
+      <div style="padding: 1rem 0; display: flex; flex-direction: column; gap: 1rem;">
+        
+        <!-- On/Off 스위치 -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 1rem; background: rgba(15, 23, 42, 0.6); border-radius: var(--m-radius-sm); border: 1px solid var(--m-border-subtle);">
+          <div>
+            <div style="font-weight: 700; font-size: 0.9rem; color: var(--m-text-primary);">⚡ 자동매매 활성화</div>
+            <div style="font-size: 0.75rem; color: var(--m-text-muted); margin-top: 2px;">LOC 주문표를 증권사 API로 자동 전송</div>
+          </div>
+          <label class="toggle-switch-ui" style="position: relative; display: inline-block; width: 46px; height: 24px;">
+            <input type="checkbox" id="m-broker-autotrade-toggle" onchange="mOnAutoTradeToggleChange()">
+            <span class="toggle-switch-slider"></span>
+          </label>
+        </div>
+
+        <!-- 증권사 선택 드롭다운 -->
+        <div class="m-form-group">
+          <label class="m-form-label">연동 증권사 선택</label>
+          <select id="m-broker-select" class="m-form-input" onchange="mOnBrokerSelectChange()" style="cursor: pointer;">
+            <option value="meritz">메리츠증권 (Open API 지원)</option>
+            <option value="kiwoom">키움증권 (영웅문 API)</option>
+            <option value="kis">한국투자증권 (KIS Developers)</option>
+          </select>
+        </div>
+
+        <!-- 키움 / 한투 구현 예정 배너 -->
+        <div id="m-broker-pending-banner" style="display: none; padding: 1rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--m-radius-sm); text-align: center;">
+          <div style="font-size: 1.5rem; margin-bottom: 0.3rem;">🚧</div>
+          <div style="font-weight: 700; color: #fbbf24; font-size: 0.95rem; margin-bottom: 0.2rem;">구현 예정입니다</div>
+          <div style="font-size: 0.75rem; color: var(--m-text-secondary); line-height: 1.4;">선택하신 증권사는 현재 연동 인터페이스 준비 중입니다.</div>
+        </div>
+
+        <!-- 메리츠 입력 폼 -->
+        <div id="m-broker-meritz-form" style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <div class="m-form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+              <label class="m-form-label" style="margin: 0;">메리츠 APP KEY *</label>
+              <span id="m-meritz-key-saved-badge" style="display: none; font-size: 0.7rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 1px 6px; border-radius: 4px;">🔒 키 등록됨</span>
+            </div>
+            <input type="text" id="m-meritz-app-key" class="m-form-input" placeholder="발급받은 APP KEY 입력" autocomplete="off">
+          </div>
+
+          <div class="m-form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+              <label class="m-form-label" style="margin: 0;">메리츠 APP SECRET *</label>
+              <span id="m-meritz-sec-saved-badge" style="display: none; font-size: 0.7rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 1px 6px; border-radius: 4px;">🔒 Secret 등록됨</span>
+            </div>
+            <input type="password" id="m-meritz-app-secret" class="m-form-input" placeholder="발급받은 APP SECRET 입력" autocomplete="off">
+            <div style="font-size: 0.7rem; color: var(--m-text-muted); margin-top: 4px;">※ 기존 키 유지 시 빈칸으로 두고 저장하세요.</div>
+          </div>
+
+          <div style="font-size: 0.725rem; color: var(--m-text-muted); padding: 0.5rem 0.75rem; background: rgba(30, 41, 59, 0.4); border-radius: 4px; border-left: 2px solid var(--m-accent-cyan);">
+            🔒 입력된 Key & Secret은 서버 로컬 256비트 대칭키로 암호화 보관됩니다.
+          </div>
+
+          <div id="m-meritz-verify-result-box" style="display: none; padding: 0.75rem; border-radius: 4px; font-size: 0.775rem; line-height: 1.4;"></div>
+        </div>
+
+        <button type="button" class="m-btn m-btn-primary" id="m-btn-broker-save" onclick="mHandleBrokerCheckAndSave()">
+          <span id="m-btn-broker-save-icon">🔍</span> <span id="m-btn-broker-save-text">Check & Save (연동 검증 및 저장)</span>
+        </button>
+      </div>
     </div>
   </div>
 

@@ -90,3 +90,11 @@ class MeritzOrderExecuteRequest(BaseModel):
     symbol: Optional[str] = None
     dry_run: Optional[bool] = None
 
+
+class AccountBrokerConfigRequest(BaseModel):
+    broker: str = Field(default="meritz", example="meritz")  # "meritz", "kiwoom", "kis"
+    enabled: bool = Field(default=False)
+    app_key: Optional[str] = Field(default=None)
+    app_secret: Optional[str] = Field(default=None)
+
+

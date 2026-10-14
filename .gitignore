@@ -53,3 +53,4 @@ data/accounts.backup.json
 data/accounts.json.tmp
 data/cloud_sync_config.json
 data/meritz_config.json
+data/.secret_key

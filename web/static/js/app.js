@@ -519,6 +519,10 @@ function renderAccountsGrid(accounts) {
     const stateClass = acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done';
     const stateText = acc.operational_state === 'WAITING_FOR_FILL' ? '장전 대기' : '정산 완료';
     const retClass = acc.return_pct >= 0 ? 'color: var(--profit-green);' : 'color: var(--loss-red);';
+    const isAutoOn = acc.auto_trade && acc.auto_trade.enabled;
+    const autoTradeBadge = isAutoOn
+      ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">🤖 자동 ON (${acc.auto_trade.broker || 'meritz'})</span>`
+      : `<span class="badge" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.2);">⚪ 자동 OFF</span>`;
 
     return `
       <div class="account-card" onclick="openAccountDetailModal('${acc.id}')">
@@ -528,6 +532,7 @@ function renderAccountsGrid(accounts) {
               <h3>${acc.name}</h3>
               <div style="margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap;">
                 ${ownerBadge}
+                ${autoTradeBadge}
                 <span class="badge badge-ticker">${acc.ticker}</span>
                 <span class="badge ${modeClass}">${acc.mode}</span>
                 <span class="badge ${stateClass}">${stateText}</span>
@@ -752,6 +757,9 @@ async function openAccountDetailModal(accId, pushHistory = true) {
         </button>
         <button class="btn btn-secondary btn-sm" onclick="openAdjustmentModal('${acc.id}')" title="입금 또는 출금 기록">
           <span>💰</span> 입출금
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openAccountBrokerModal('${acc.id}')" title="계좌별 자동매매 및 증권사 API 연동 설정" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: var(--accent-cyan); font-weight: 600;">
+          <span>🤖</span> 자동매매 설정
         </button>
       `;
     }
@@ -1162,6 +1170,258 @@ async function submitNewAccount() {
 function closeModal(id) {
   const modal = document.getElementById(id);
   if (modal) modal.classList.remove('active');
+}
+
+// -------------------------------------------------------------------
+// 계좌별 자동매매 & 브로커 연동 모달 (Broker Settings Modal)
+// -------------------------------------------------------------------
+let currentBrokerAccId = null;
+let currentBrokerConfig = null;
+
+async function openAccountBrokerModal(accId) {
+  currentBrokerAccId = accId;
+  const modal = document.getElementById('accountBrokerModal');
+  if (!modal) return;
+
+  const keyInput = document.getElementById('meritz-app-key');
+  const secInput = document.getElementById('meritz-app-secret');
+  const keyBadge = document.getElementById('meritz-key-saved-badge');
+  const secBadge = document.getElementById('meritz-sec-saved-badge');
+  const resultBox = document.getElementById('meritz-verify-result-box');
+  const subtitleEl = document.getElementById('broker-modal-acc-subtitle');
+
+  if (keyInput) keyInput.value = '';
+  if (secInput) secInput.value = '';
+  if (resultBox) {
+    resultBox.style.display = 'none';
+    resultBox.innerHTML = '';
+  }
+
+  try {
+    const res = await fetch(`/api/accounts/${accId}/broker`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const cfg = data.config || {};
+    currentBrokerConfig = cfg;
+
+    if (subtitleEl) {
+      subtitleEl.textContent = `계좌: ${cfg.account_name || accId} (${cfg.ticker || ''})`;
+    }
+
+    const toggle = document.getElementById('broker-autotrade-toggle');
+    if (toggle) toggle.checked = !!cfg.enabled;
+
+    const select = document.getElementById('broker-select');
+    if (select) select.value = cfg.broker || 'meritz';
+
+    if (cfg.has_credentials) {
+      if (keyBadge) keyBadge.style.display = 'inline-block';
+      if (secBadge) secBadge.style.display = 'inline-block';
+      if (keyInput) keyInput.placeholder = `등록됨 (${cfg.app_key_masked || '******'})`;
+      if (secInput) secInput.placeholder = '등록됨 (변경 시에만 입력)';
+    } else {
+      if (keyBadge) keyBadge.style.display = 'none';
+      if (secBadge) secBadge.style.display = 'none';
+      if (keyInput) keyInput.placeholder = '발급받은 APP KEY 입력';
+      if (secInput) secInput.placeholder = '발급받은 APP SECRET 입력';
+    }
+
+    if (cfg.last_status === 'SUCCESS' && cfg.last_message) {
+      if (resultBox) {
+        resultBox.style.display = 'block';
+        resultBox.style.background = 'rgba(16, 185, 129, 0.12)';
+        resultBox.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+        resultBox.style.color = '#34d399';
+        resultBox.innerHTML = `<strong>최근 연동 확인 (${cfg.last_checked_at || ''}):</strong><br>${cfg.last_message}`;
+      }
+    }
+
+    onAutoTradeToggleChange();
+    onBrokerSelectChange();
+
+    modal.style.display = 'flex';
+  } catch (e) {
+    console.error('브로커 설정 로드 실패:', e);
+    showToast('계좌 브로커 설정을 불러오지 못했습니다.', 'error');
+  }
+}
+
+function closeAccountBrokerModal() {
+  const modal = document.getElementById('accountBrokerModal');
+  if (modal) modal.style.display = 'none';
+  currentBrokerAccId = null;
+}
+
+function onAutoTradeToggleChange() {
+  const toggle = document.getElementById('broker-autotrade-toggle');
+  const isEnabled = toggle ? toggle.checked : false;
+  const selectContainer = document.getElementById('broker-select-container');
+
+  if (selectContainer) {
+    selectContainer.style.opacity = isEnabled ? '1' : '0.6';
+  }
+  onBrokerSelectChange();
+}
+
+function onBrokerSelectChange() {
+  const select = document.getElementById('broker-select');
+  const broker = select ? select.value : 'meritz';
+  const toggle = document.getElementById('broker-autotrade-toggle');
+  const isEnabled = toggle ? toggle.checked : false;
+
+  const meritzForm = document.getElementById('broker-meritz-form');
+  const pendingBanner = document.getElementById('broker-pending-banner');
+  const pendingTitle = document.getElementById('broker-pending-title');
+  const btnText = document.getElementById('btn-broker-save-text');
+  const btnIcon = document.getElementById('btn-broker-save-icon');
+
+  if (broker === 'kiwoom' || broker === 'kis') {
+    if (meritzForm) meritzForm.style.display = 'none';
+    if (pendingBanner) {
+      pendingBanner.style.display = 'block';
+      const name = broker === 'kiwoom' ? '키움증권 (영웅문 API)' : '한국투자증권 (KIS Developers)';
+      if (pendingTitle) pendingTitle.textContent = `${name} - 구현 예정입니다`;
+    }
+    if (btnText) btnText.textContent = '설정 저장하기';
+    if (btnIcon) btnIcon.textContent = '💾';
+  } else {
+    // meritz
+    if (pendingBanner) pendingBanner.style.display = 'none';
+    if (meritzForm) meritzForm.style.display = 'flex';
+    if (btnText) {
+      btnText.textContent = isEnabled ? 'Check & Save (연동 검증 및 저장)' : '설정 저장하기';
+    }
+    if (btnIcon) btnIcon.textContent = isEnabled ? '🔍' : '💾';
+  }
+}
+
+async function handleBrokerCheckAndSave() {
+  if (!currentBrokerAccId) return;
+
+  const toggle = document.getElementById('broker-autotrade-toggle');
+  const select = document.getElementById('broker-select');
+  const keyInput = document.getElementById('meritz-app-key');
+  const secInput = document.getElementById('meritz-app-secret');
+  const btn = document.getElementById('btn-broker-save');
+  const btnText = document.getElementById('btn-broker-save-text');
+  const resultBox = document.getElementById('meritz-verify-result-box');
+
+  const enabled = toggle ? toggle.checked : false;
+  const broker = select ? select.value : 'meritz';
+  const appKey = keyInput ? keyInput.value.trim() : '';
+  const appSecret = secInput ? secInput.value.trim() : '';
+
+  // 1. 키움 / 한국투자증권 선택 시
+  if (broker === 'kiwoom' || broker === 'kis') {
+    try {
+      btn.disabled = true;
+      const res = await fetch(`/api/accounts/${currentBrokerAccId}/broker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker, enabled })
+      });
+      const data = await res.json();
+      showToast(data.message || '설정이 저장되었습니다.');
+      closeAccountBrokerModal();
+      await loadAccounts();
+      if (state.activeAccountDetail && state.activeAccountDetail.account && state.activeAccountDetail.account.id === currentBrokerAccId) {
+        await openAccountDetailModal(currentBrokerAccId, false);
+      }
+    } catch (e) {
+      showToast('설정 저장 실패: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  // 2. 메리츠증권 - 자동매매가 OFF이고 키 변경 없이 저장만 하는 경우
+  if (!enabled && !appKey && !appSecret) {
+    try {
+      btn.disabled = true;
+      const res = await fetch(`/api/accounts/${currentBrokerAccId}/broker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker: 'meritz', enabled: false })
+      });
+      const data = await res.json();
+      showToast('자동매매가 비활성화되었습니다.');
+      closeAccountBrokerModal();
+      await loadAccounts();
+      if (state.activeAccountDetail && state.activeAccountDetail.account && state.activeAccountDetail.account.id === currentBrokerAccId) {
+        await openAccountDetailModal(currentBrokerAccId, false);
+      }
+    } catch (e) {
+      showToast('설정 저장 실패: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  // 3. 메리츠증권 - Check & Save 검증 및 저장
+  try {
+    btn.disabled = true;
+    if (btnText) btnText.textContent = '⏳ 메리츠 Open API 검증 중...';
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      resultBox.style.background = 'rgba(56, 189, 248, 0.12)';
+      resultBox.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      resultBox.style.color = 'var(--accent-cyan)';
+      resultBox.innerHTML = '메리츠증권 Open API에 접속하여 OAuth 토큰 및 외화 예수금 조회를 검증하고 있습니다...';
+    }
+
+    const res = await fetch(`/api/accounts/${currentBrokerAccId}/broker/check-save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        broker: 'meritz',
+        enabled: enabled,
+        app_key: appKey || null,
+        app_secret: appSecret || null
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      if (resultBox) {
+        resultBox.style.background = 'rgba(16, 185, 129, 0.15)';
+        resultBox.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+        resultBox.style.color = '#34d399';
+        resultBox.innerHTML = `<strong>✅ 연동 검증 성공!</strong><br>${data.message || 'API가 정상 작동하며 키 값이 안전하게 암호화 저장되었습니다.'}`;
+      }
+      showToast('🎉 메리츠증권 연동 성공! 암호화 저장이 완료되었습니다.');
+      
+      setTimeout(async () => {
+        closeAccountBrokerModal();
+        await loadAccounts();
+        if (state.activeAccountDetail && state.activeAccountDetail.account && state.activeAccountDetail.account.id === currentBrokerAccId) {
+          await openAccountDetailModal(currentBrokerAccId, false);
+        }
+      }, 900);
+    } else {
+      if (resultBox) {
+        resultBox.style.background = 'rgba(239, 68, 68, 0.15)';
+        resultBox.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        resultBox.style.color = '#f87171';
+        resultBox.innerHTML = `<strong>❌ 연동 검증 실패:</strong><br>${data.message || 'API 연결에 실패했습니다. 키 값을 다시 확인해 주세요.'}`;
+      }
+      showToast('메리츠증권 검증 실패: ' + (data.message || '오류 발생'), 'error');
+    }
+  } catch (e) {
+    console.error('Check & Save 에러:', e);
+    if (resultBox) {
+      resultBox.style.background = 'rgba(239, 68, 68, 0.15)';
+      resultBox.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      resultBox.style.color = '#f87171';
+      resultBox.innerHTML = `<strong>❌ 통신 오류:</strong> ${e.message}`;
+    }
+    showToast('통신 오류: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    onBrokerSelectChange();
+  }
 }
 
 // -------------------------------------------------------------------
