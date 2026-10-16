@@ -754,7 +754,7 @@
   </div>
 
   <!-- 3. 당일 종가 & 체결 정산 모달 -->
-  <div class="modal-overlay" id="settlementModal">
+  <div class="modal-overlay" id="settlementModal" onclick="if(event.target===this) closeModal('settlementModal')">
     <div class="modal-content">
       <div class="modal-header">
         <h2>일일 마감 정산 (종가 & 체결 입력)</h2>
@@ -787,7 +787,7 @@
   </div>
 
   <!-- 4. 입출금 모달 -->
-  <div class="modal-overlay" id="adjustmentModal">
+  <div class="modal-overlay" id="adjustmentModal" onclick="if(event.target===this) closeModal('adjustmentModal')">
     <div class="modal-content">
       <div class="modal-header">
         <h2>계좌 자산 입금 / 출금</h2>
@@ -1299,6 +1299,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.5.8"></script>
+  <script src="/static/js/app.js?v=2.5.9"></script>
 </body>
 </html>

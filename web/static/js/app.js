@@ -1742,8 +1742,10 @@ async function undoLastTradeRecord(accId) {
 
 function openSettlementModal(accId) {
   const modal = document.getElementById('settlementModal');
+  if (!modal) return;
   document.getElementById('settle-acc-id').value = accId;
   modal.classList.add('active');
+  modal.style.display = 'flex';
 }
 
 async function submitSettlement() {
@@ -1862,9 +1864,11 @@ async function submitEditTradeRecord() {
 
 function openAdjustmentModal(accId) {
   const modal = document.getElementById('adjustmentModal');
+  if (!modal) return;
   document.getElementById('adj-acc-id').value = accId;
   document.getElementById('adj-date').value = new Date().toISOString().substring(0, 10);
   modal.classList.add('active');
+  modal.style.display = 'flex';
 }
 
 async function submitAdjustment() {
@@ -1898,8 +1902,11 @@ async function submitAdjustment() {
 }
 
 function openNewAccountModal() {
+  const modal = document.getElementById('newAccountModal');
+  if (!modal) return;
   document.getElementById('new-acc-start-date').value = new Date().toISOString().substring(0, 10);
-  document.getElementById('newAccountModal').classList.add('active');
+  modal.classList.add('active');
+  modal.style.display = 'flex';
 }
 
 async function submitNewAccount() {
