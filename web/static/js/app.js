@@ -1058,8 +1058,25 @@ function renderDetailSubTabs(data) {
       </div>
     `;
 
+    const netting = orders.netting_info || (data.orders && data.orders.netting_info) || data.netting_info;
+    let nettingBannerHtml = '';
+    if (netting && netting.is_netted) {
+      nettingBannerHtml = `
+        <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.15rem;">⚡</span>
+            <span style="color: #6ee7b7; font-size: 0.85rem; font-weight: 600;">${netting.summary_text}</span>
+          </div>
+          <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.4);">
+            상계 수량: ${fmt.num(netting.max_offset_qty)}주
+          </span>
+        </div>
+      `;
+    }
+
     if (buyList.length > 0 || sellList.length > 0) {
       ordersContent += `
+        ${nettingBannerHtml}
         <table class="custom-table">
           <thead>
             <tr>
@@ -1067,32 +1084,36 @@ function renderDetailSubTabs(data) {
               <th>주문 단가</th>
               <th>주문 수량</th>
               <th>주문 금액</th>
-              <th>메모</th>
+              <th>메모 / 퉁치기 내역</th>
             </tr>
           </thead>
           <tbody>
             ${sellList.map(o => {
               const { p, q, a, m } = parseFn(o);
-              const typeStr = o['주문유형'] || 'LOC 매도';
+              const typeStr = o['구분'] || o['주문유형'] || 'LOC 매도';
+              const noteStr = o['비고'] || m || '';
+              const isOffset = noteStr.includes('상계') || typeStr.includes('상계');
               return `
               <tr>
-                <td><span class="tag-sell">${typeStr}</span></td>
+                <td><span class="${isOffset ? 'badge' : 'tag-sell'}" style="${isOffset ? 'background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);font-weight:700;' : ''}">${typeStr}</span></td>
                 <td>${fmt.usd(p)}</td>
                 <td>${fmt.num(q)}주</td>
                 <td>${fmt.usd(a)}</td>
-                <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
+                <td><span style="font-size:0.775rem;color:${isOffset ? '#38bdf8' : 'var(--text-muted)'};font-weight:${isOffset ? '600' : '400'};">${noteStr}</span></td>
               </tr>
             `;}).join('')}
             ${buyList.map(o => {
               const { p, q, a, m } = parseFn(o);
-              const typeStr = o['주문유형'] || 'LOC 매수';
+              const typeStr = o['호가단계'] || o['주문유형'] || 'LOC 매수';
+              const noteStr = o['비고'] || m || '';
+              const isOffset = noteStr.includes('상계') || typeStr.includes('상계');
               return `
               <tr>
-                <td><span class="tag-buy">${typeStr}</span></td>
+                <td><span class="${isOffset ? 'badge' : 'tag-buy'}" style="${isOffset ? 'background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.4);font-weight:700;' : ''}">${typeStr}</span></td>
                 <td>${fmt.usd(p)}</td>
                 <td>${fmt.num(q)}주</td>
                 <td>${fmt.usd(a)}</td>
-                <td><span style="font-size:0.75rem;color:var(--text-muted);">${m}</span></td>
+                <td><span style="font-size:0.775rem;color:${isOffset ? '#34d399' : 'var(--text-muted)'};font-weight:${isOffset ? '600' : '400'};">${noteStr}</span></td>
               </tr>
             `;}).join('')}
           </tbody>

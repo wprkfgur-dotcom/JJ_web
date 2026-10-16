@@ -296,7 +296,9 @@ def generate_jongjong_orders(
     AU3, AV3, tung_lot = None, 0, None
     if loc_lots:
         min_u = min(l['U'] for l in loc_lots)
-        if is_normal and BB3 >= min_u:
+        is_safe_tung = (mode == 'Safe' and min_u <= safe_round4(AU2 * 1.01))
+        is_normal_tung = (is_normal and BB3 >= min_u)
+        if is_normal_tung or is_safe_tung:
             AU3 = min_u
             for l in loc_lots:
                 if l['U'] == min_u:
@@ -327,7 +329,7 @@ def generate_jongjong_orders(
         })
 
     # (2) LOC 목표 매도 (퉁치기 슬롯 및 일반 슬롯)
-    if tung_lot is not None:
+    if tung_lot is not None and is_normal:
         # 하루 매수예정금(AU1)으로 AU3(목표가)에서 매수 가능한 최대 수량 산출
         buyable_at_target = int(AU1 / AU3) if AU3 > 0 else 0
 
@@ -408,15 +410,18 @@ def generate_jongjong_orders(
             accum_s += q
             pct = (l['U'] / AU2 - 1.0) * 100.0
             d_str = l.get('date', '')
+            is_this_tung = (tung_lot is not None and l is tung_lot)
+            stage_name = f"당일 상계 매도 ({d_str} 로트)" if is_this_tung else f"목표 익절 매도 ({d_str} 로트)"
+            note = f"당일 1차 매수와 100% 상계(퉁치기)되는 매도 주문 ({q:,}주)" if is_this_tung else "개별 슬롯 목표가 도달 시 전량 매도"
             formatted_sells.append({
-                '구분': f"목표 익절 매도 ({d_str} 로트)",
+                '구분': stage_name,
                 '주문유형': 'LOC 매도',
                 '주문단가': f"${l['U']:.2f}",
                 '주문수량': f"{q:,}주",
                 '누적수량': f"{accum_s:,}주",
                 '예상금액': f"${l['U'] * q:,.2f}",
                 '체결조건': f"종가 ≥ ${l['U']:.2f} ({pct:+.1f}%)",
-                '비고': "개별 슬롯 목표가 도달 시 전량 매도",
+                '비고': note,
                 'price': l['U'],
                 'qty': q
             })
@@ -561,15 +566,22 @@ def generate_jongjong_orders(
                 if p is not None and q > 0:
                     accum_b += q
                     pct = (p / AU2 - 1.0) * 100.0
+                    if k == 0 and sell_offset > 0:
+                        stage_name = "1차 순매수 (퉁치기 상계)"
+                        note = f"당일 매도({sell_offset:,}주) 상계 후 순매수 ({AZ2:,}주 - {sell_offset:,}주 = {primary_az2:,}주)"
+                    else:
+                        stage_name = f"{step_idx}차 분할매수"
+                        note = "일반 분할 LOC 매수"
+
                     formatted_buys.append({
-                        '호가단계': f"{step_idx}차 분할매수",
+                        '호가단계': stage_name,
                         '주문유형': 'LOC 매수',
                         '주문단가': f"${p:.2f}",
                         '주문수량': f"{q:,}주",
                         '누적수량': f"{accum_b:,}주",
                         '예상금액': f"${p * q:,.2f}",
                         '체결조건': f"종가 ≤ ${p:.2f} ({pct:+.1f}%)",
-                        '비고': "일반 분할 LOC 매수",
+                        '비고': note,
                         'price': float(p),
                         'qty': int(q)
                     })
@@ -594,13 +606,29 @@ def generate_jongjong_orders(
                     'qty': int(BF4)
                 })
 
-    is_netted = (tung_lot is not None)
-    max_offset_qty = AV3 if is_netted else 0
+    # 퉁치기 여부 및 요약 텍스트
+    current_sell_offset = locals().get('sell_offset', 0)
+    current_az2 = locals().get('AZ2', 0)
+    current_primary_az2 = locals().get('primary_az2', 0)
+
+    is_netted = (tung_lot is not None) or (current_sell_offset > 0)
+    max_offset_qty = max(AV3 if tung_lot else 0, current_sell_offset)
+
     if is_netted:
-        summary_text = (
-            f"⚡ [종종이 퉁치기 적용] 최저 목표가 슬롯({tung_lot.get('date', '')}, {AV3:,}주)을 당일 매수와 상계하여 "
-            f"맥스 익절(+{C2*100:.1f}%) 매도 1개 및 순매수 3단계로 재구성했습니다 (총 매도 주문: {len(formatted_sells)}개)."
-        )
+        if mode == 'Safe' and (current_sell_offset > 0 or tung_lot is not None):
+            summary_text = (
+                f"[Safe 모드 퉁치기 적용] 당일 종가 부근 목표가 매도({max_offset_qty:,}주)가 "
+                f"당일 1차 매수({current_az2:,}주)와 100% 상계되어 순매수 수량이 {current_primary_az2:,}주로 대폭 축소되었습니다."
+            )
+        elif is_normal and tung_lot is not None:
+            summary_text = (
+                f"[종종이 퉁치기 적용] 최저 목표가 슬롯({tung_lot.get('date', '')}, {AV3:,}주)을 당일 매수와 상계하여 "
+                f"맥스 익절(+{C2*100:.1f}%) 매도 1개 및 순매수 3단계로 재구성했습니다 (총 매도 주문: {len(formatted_sells)}개)."
+            )
+        else:
+            summary_text = (
+                f"[퉁치기 적용] 당일 매수/매도 중복 수량({max_offset_qty:,}주)을 상계하여 순주문표로 재구성했습니다."
+            )
     else:
         summary_text = f"미매도 슬롯({len(formatted_sells)}개)에 대한 개별 목표가 매도 주문이 유지됩니다."
 

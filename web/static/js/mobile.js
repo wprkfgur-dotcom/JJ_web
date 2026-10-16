@@ -384,16 +384,15 @@ function renderMobileOrders(container, data) {
     `;
   }
   
-  // 상계 요약 배너
-  if (netting && netting.needs_action) {
+  // 상계 요약 배너 (퉁치기 적용 시 표시)
+  if (netting && (netting.is_netted || netting.needs_action)) {
+    const bannerText = netting.summary_text || `⚡ 최종 상계 주문: ${netting.action_type === 'BUY' ? '순매수' : '순매도'} ${netting.net_qty}주`;
     html += `
-      <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);padding:0.8rem;border-radius:10px;margin-bottom:0.85rem;">
-        <div style="font-weight:700;color:var(--m-accent-cyan);font-size:0.85rem;margin-bottom:0.2rem;">
-          ⚡ 최종 상계 주문: ${netting.action_type === 'BUY' ? '순매수' : '순매도'} ${netting.net_qty}주
+      <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);padding:0.75rem 0.85rem;border-radius:10px;margin-bottom:0.85rem;">
+        <div style="font-weight:700;color:#34d399;font-size:0.825rem;line-height:1.4;">
+          ⚡ ${bannerText}
         </div>
-        <div style="font-size:0.775rem;color:var(--m-text-secondary);">
-          체결 예상 금액: ${mFmt.usd(netting.est_amount)} (매수 ${netting.total_buy_qty}주 / 매도 ${netting.total_sell_qty}주)
-        </div>
+        ${netting.max_offset_qty ? `<div style="font-size:0.725rem;color:var(--m-text-secondary);margin-top:4px;">상계 처리 수량: <strong>${mFmt.num(netting.max_offset_qty)}주</strong></div>` : ''}
       </div>
     `;
   }
