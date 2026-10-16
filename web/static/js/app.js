@@ -1820,12 +1820,22 @@ window.executeDeleteAccount = executeDeleteAccount;
 // 계좌 관련 제어 액션들
 // -------------------------------------------------------------------
 async function advanceAccountDay(accId) {
+  const acc = (state.accounts || []).find(a => a.id === accId) || (state.activeAccountDetail ? state.activeAccountDetail.account : null);
+  const curDate = acc ? (acc.current_date || '당일') : '당일';
+  const opState = acc ? acc.operational_state : '';
+
+  let confirmMsg = `계좌의 운용 기준일을 다음 미국 거래일로 진행하시겠습니까?`;
+  if (opState === 'WAITING_FOR_FILL') {
+    confirmMsg = `⚠️ 주의: 현재 운용일(${curDate})의 종가 정산(체결 기록)이 완료되지 않은 상태입니다.\n\n정산 없이 다음 거래일로 건너뛰시겠습니까?`;
+  }
+  if (!confirm(confirmMsg)) return;
+
   try {
     const res = await authFetch(`/api/accounts/${accId}/advance-day`, { method: 'POST' });
     const data = await res.json();
     if (data.success) {
       showToast('다음 거래일로 진행되었습니다.');
-      await openAccountDetailModal(accId);
+      await openAccountDetailModal(accId, false);
       loadAccounts(true);
     }
   } catch (e) {
