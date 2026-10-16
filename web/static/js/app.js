@@ -756,7 +756,7 @@ async function openAccountDetailModal(accId, pushHistory = true) {
         <button class="btn btn-secondary btn-sm" onclick="openAdjustmentModal('${acc.id}')" title="입금 또는 출금 기록">
           <span>💰</span> 입출금
         </button>
-        <button class="btn btn-secondary btn-sm" onclick="openAccountBrokerModal('${acc.id}')" title="계좌별 자동매매 및 증권사 API 연동 설정" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: var(--accent-cyan); font-weight: 600;">
+        <button class="btn btn-secondary btn-sm" onclick="goToAccountBrokerSettings('${acc.id}')" title="계좌 설정 > 자동매매 및 증권사 API 연동" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: var(--accent-cyan); font-weight: 600;">
           <span>🤖</span> 자동매매 설정
         </button>
       `;
@@ -1521,18 +1521,123 @@ function renderDetailSubTabs(data) {
           </div>
         </div>
 
-        <!-- 3. 하단 안내문구 & 저장 버튼 바 -->
+        <!-- 3. 하단 안내문구 & 전략 설정 저장 버튼 바 -->
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; padding: 1.1rem; background: rgba(30, 41, 59, 0.4); border-radius: var(--radius-sm); border: 1px solid rgba(255,255,255,0.06);">
           <div style="font-size: 0.775rem; color: var(--text-muted); line-height: 1.5; max-width: 580px;">
             💡 <strong>안내:</strong> 최초원금, SEC Fee, 수수료합은 시스템 자동 산출되므로 별도 설정할 필요가 없습니다.<br>
             설정 저장 시 즉시 해당 계좌의 당일 LOC 주문표 및 매수/매도 수량이 자동 재계산됩니다.
           </div>
           <button type="button" class="btn btn-primary" onclick="saveAccountStrategyParams('${acc.id}')" style="padding: 0.75rem 1.75rem; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);">
-            <span>💾</span> 계좌 설정 저장
+            <span>💾</span> 전략 파라미터 저장
           </button>
         </div>
 
-        <!-- 4. 위험 영역: 계좌 삭제 (Danger Zone) -->
+        <!-- 4. 🤖 계좌 자동매매 & 브로커 연동 설정 카드 (계좌 설정 내부 통합) -->
+        <div id="sp-broker-setting-section" style="margin-top: 1.5rem; background: rgba(30, 41, 59, 0.45); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-sm); padding: 1.25rem; transition: all 0.3s ease;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+              <h4 style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 0.4rem;">
+                <span>🤖</span> 계좌 자동매매 & 증권사 Open API 연동
+              </h4>
+              <p style="margin: 3px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">
+                장전 도출된 LOC 주문표를 증권사 API로 자동 전송하며, 모든 Rest API 호출 내역은 텔레그램으로 자동 보고됩니다.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">자동매매 실행:</span>
+              <label class="toggle-switch-ui" style="position: relative; display: inline-block; width: 48px; height: 24px;">
+                <input type="checkbox" id="tab-broker-autotrade-toggle" onchange="onTabAutoTradeToggleChange()">
+                <span class="toggle-switch-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 증권사 선택 & 텔레그램 상태 -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+            <div id="tab-broker-select-container">
+              <label for="tab-broker-select" style="display: block; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;">
+                연동 증권사 선택
+              </label>
+              <select id="tab-broker-select" class="form-input" style="width: 100%; cursor: pointer;" onchange="onTabBrokerSelectChange()">
+                <option value="meritz">메리츠증권 (Open API 지원)</option>
+                <option value="kiwoom">키움증권 (영웅문 API)</option>
+                <option value="kis">한국투자증권 (KIS Developers)</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0.9rem; background: rgba(15, 23, 42, 0.6); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <div>
+                <div style="font-weight: 600; font-size: 0.82rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.35rem;">
+                  <span>📢</span> Open API 텔레그램 실시간 전송
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">
+                  모든 Rest API 호출 내역 자동 발송
+                </div>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.15); padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 600;">
+                실시간 전송 강제 (Active)
+              </span>
+            </div>
+          </div>
+
+          <!-- 키움 / 한국투자증권 준비중 안내 배너 -->
+          <div id="tab-broker-pending-banner" style="display: none; padding: 1.25rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-sm); text-align: center; margin-bottom: 1rem;">
+            <div style="font-size: 1.8rem; margin-bottom: 0.3rem;">🚧</div>
+            <div id="tab-broker-pending-title" style="font-weight: 700; color: #fbbf24; font-size: 0.95rem; margin-bottom: 0.2rem;">구현 예정입니다</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">선택하신 증권사는 현재 Open API 연동 인터페이스를 준비 중입니다.</div>
+          </div>
+
+          <!-- 메리츠 입력 폼 -->
+          <div id="tab-broker-meritz-form" style="display: flex; flex-direction: column; gap: 0.9rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <label for="tab-meritz-app-key" style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin: 0;">
+                  메리츠 Open API APP KEY *
+                </label>
+                <span id="tab-meritz-key-saved-badge" style="display: none; font-size: 0.72rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 1px 7px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                  🔒 키 등록됨
+                </span>
+              </div>
+              <input type="text" id="tab-meritz-app-key" class="form-input" placeholder="발급받은 APP KEY 입력" autocomplete="off" style="width: 100%;">
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <label for="tab-meritz-app-secret" style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); margin: 0;">
+                  메리츠 Open API APP SECRET *
+                </label>
+                <span id="tab-meritz-sec-saved-badge" style="display: none; font-size: 0.72rem; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 1px 7px; border-radius: 4px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                  🔒 Secret 등록됨
+                </span>
+              </div>
+              <div style="display: flex; gap: 0.4rem;">
+                <input type="password" id="tab-meritz-app-secret" class="form-input" placeholder="발급받은 APP SECRET 입력" autocomplete="off" style="flex: 1;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="togglePasswordVisibility('tab-meritz-app-secret')" title="표시/숨김" style="padding: 0 0.8rem;">👁️</button>
+              </div>
+              <p style="font-size: 0.72rem; color: var(--text-muted); margin: 4px 0 0 0;">
+                ※ 기존 등록된 키를 유지하시려면 빈칸으로 두고 저장하세요.
+              </p>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem; background: rgba(15, 23, 42, 0.5); border-radius: var(--radius-sm); border-left: 3px solid var(--accent-cyan); font-size: 0.75rem; color: var(--text-secondary);">
+              <span>🔒</span>
+              <span>입력하신 API Key & Secret은 서버 로컬의 <strong>256비트 대칭키(AES/Fernet)</strong>로 암호화되어 안전하게 보관됩니다.</span>
+            </div>
+
+            <!-- 검증 상태 결과 박스 -->
+            <div id="tab-meritz-verify-result-box" style="display: none; padding: 0.8rem 1rem; border-radius: var(--radius-sm); font-size: 0.82rem; line-height: 1.4;"></div>
+          </div>
+
+          <!-- 자동매매 설정 저장 버튼 바 -->
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 0.6rem; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 0.85rem;">
+            <button type="button" class="btn btn-primary" id="tab-btn-broker-save" onclick="handleTabBrokerCheckAndSave('${acc.id}')" style="font-weight: 700; padding: 0.65rem 1.4rem;">
+              <span id="tab-btn-broker-save-icon">🔍</span>
+              <span id="tab-btn-broker-save-text">Check & Save (연동 검증 및 저장)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. 위험 영역: 계좌 삭제 (Danger Zone) -->
         <div style="margin-top: 1.5rem; padding: 1.1rem 1.25rem; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
             <div style="font-weight: 700; color: #f87171; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
@@ -1548,6 +1653,11 @@ function renderDetailSubTabs(data) {
         </div>
       </div>
     `;
+
+    // 탭 내부 브로커 설정 비동기 로드
+    setTimeout(() => {
+      loadTabBrokerSettings(acc.id);
+    }, 0);
   }
 }
 
@@ -1966,22 +2076,31 @@ document.addEventListener('keydown', (e) => {
 });
 
 // -------------------------------------------------------------------
-// 계좌별 자동매매 & 브로커 연동 모달 (Broker Settings Modal)
+// 계좌 설정 탭 내 자동매매 & 브로커 연동 네비게이션 & 핸들러
 // -------------------------------------------------------------------
-let currentBrokerAccId = null;
-let currentBrokerConfig = null;
+function goToAccountBrokerSettings(accId) {
+  switchDetailSubTab('strategy-settings');
+  setTimeout(() => {
+    const sec = document.getElementById('sp-broker-setting-section');
+    if (sec) {
+      sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      sec.style.outline = '2px solid var(--accent-cyan)';
+      setTimeout(() => { sec.style.outline = 'none'; }, 1500);
+    }
+  }, 100);
+}
+window.goToAccountBrokerSettings = goToAccountBrokerSettings;
 
-async function openAccountBrokerModal(accId) {
-  currentBrokerAccId = accId;
-  const modal = document.getElementById('accountBrokerModal');
-  if (!modal) return;
+let currentTabBrokerConfig = null;
 
-  const keyInput = document.getElementById('meritz-app-key');
-  const secInput = document.getElementById('meritz-app-secret');
-  const keyBadge = document.getElementById('meritz-key-saved-badge');
-  const secBadge = document.getElementById('meritz-sec-saved-badge');
-  const resultBox = document.getElementById('meritz-verify-result-box');
-  const subtitleEl = document.getElementById('broker-modal-acc-subtitle');
+async function loadTabBrokerSettings(accId) {
+  const toggle = document.getElementById('tab-broker-autotrade-toggle');
+  const select = document.getElementById('tab-broker-select');
+  const keyInput = document.getElementById('tab-meritz-app-key');
+  const secInput = document.getElementById('tab-meritz-app-secret');
+  const keyBadge = document.getElementById('tab-meritz-key-saved-badge');
+  const secBadge = document.getElementById('tab-meritz-sec-saved-badge');
+  const resultBox = document.getElementById('tab-meritz-verify-result-box');
 
   if (keyInput) keyInput.value = '';
   if (secInput) secInput.value = '';
@@ -1995,16 +2114,9 @@ async function openAccountBrokerModal(accId) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const cfg = data.config || {};
-    currentBrokerConfig = cfg;
+    currentTabBrokerConfig = cfg;
 
-    if (subtitleEl) {
-      subtitleEl.textContent = `계좌: ${cfg.account_name || accId} (${cfg.ticker || ''})`;
-    }
-
-    const toggle = document.getElementById('broker-autotrade-toggle');
     if (toggle) toggle.checked = !!cfg.enabled;
-
-    const select = document.getElementById('broker-select');
     if (select) select.value = cfg.broker || 'meritz';
 
     if (cfg.has_credentials) {
@@ -2019,20 +2131,192 @@ async function openAccountBrokerModal(accId) {
       if (secInput) secInput.placeholder = '발급받은 APP SECRET 입력';
     }
 
-    if (resultBox) {
-      resultBox.style.display = 'none';
-      resultBox.innerHTML = '';
-    }
-
-    onAutoTradeToggleChange();
-    onBrokerSelectChange();
-
-    openModal('accountBrokerModal');
+    onTabAutoTradeToggleChange();
+    onTabBrokerSelectChange();
   } catch (e) {
-    console.error('브로커 설정 로드 실패:', e);
-    showToast('계좌 브로커 설정을 불러오지 못했습니다.', 'error');
+    console.error('탭 브로커 설정 로드 실패:', e);
   }
 }
+window.loadTabBrokerSettings = loadTabBrokerSettings;
+
+function onTabAutoTradeToggleChange() {
+  const toggle = document.getElementById('tab-broker-autotrade-toggle');
+  const isEnabled = toggle ? toggle.checked : false;
+  const selectContainer = document.getElementById('tab-broker-select-container');
+
+  if (selectContainer) {
+    selectContainer.style.opacity = isEnabled ? '1' : '0.6';
+  }
+  onTabBrokerSelectChange();
+}
+window.onTabAutoTradeToggleChange = onTabAutoTradeToggleChange;
+
+function onTabBrokerSelectChange() {
+  const select = document.getElementById('tab-broker-select');
+  const broker = select ? select.value : 'meritz';
+  const toggle = document.getElementById('tab-broker-autotrade-toggle');
+  const isEnabled = toggle ? toggle.checked : false;
+
+  const meritzForm = document.getElementById('tab-broker-meritz-form');
+  const pendingBanner = document.getElementById('tab-broker-pending-banner');
+  const pendingTitle = document.getElementById('tab-broker-pending-title');
+  const btnText = document.getElementById('tab-btn-broker-save-text');
+  const btnIcon = document.getElementById('tab-btn-broker-save-icon');
+
+  if (broker === 'kiwoom' || broker === 'kis') {
+    if (meritzForm) meritzForm.style.display = 'none';
+    if (pendingBanner) {
+      pendingBanner.style.display = 'block';
+      const name = broker === 'kiwoom' ? '키움증권 (영웅문 API)' : '한국투자증권 (KIS Developers)';
+      if (pendingTitle) pendingTitle.textContent = `${name} - 구현 예정입니다`;
+    }
+    if (btnText) btnText.textContent = '설정 저장하기';
+    if (btnIcon) btnIcon.textContent = '💾';
+  } else {
+    // meritz
+    if (pendingBanner) pendingBanner.style.display = 'none';
+    if (meritzForm) meritzForm.style.display = 'flex';
+    if (btnText) {
+      btnText.textContent = isEnabled ? 'Check & Save (연동 검증 및 저장)' : '설정 저장하기';
+    }
+    if (btnIcon) btnIcon.textContent = isEnabled ? '🔍' : '💾';
+  }
+}
+window.onTabBrokerSelectChange = onTabBrokerSelectChange;
+
+async function handleTabBrokerCheckAndSave(accId) {
+  if (!accId) return;
+
+  const toggle = document.getElementById('tab-broker-autotrade-toggle');
+  const select = document.getElementById('tab-broker-select');
+  const keyInput = document.getElementById('tab-meritz-app-key');
+  const secInput = document.getElementById('tab-meritz-app-secret');
+  const btn = document.getElementById('tab-btn-broker-save');
+  const btnText = document.getElementById('tab-btn-broker-save-text');
+  const resultBox = document.getElementById('tab-meritz-verify-result-box');
+
+  const enabled = toggle ? toggle.checked : false;
+  const broker = select ? select.value : 'meritz';
+  const appKey = keyInput ? keyInput.value.trim() : '';
+  const appSecret = secInput ? secInput.value.trim() : '';
+
+  // 1. 키움 / 한국투자증권 선택 시
+  if (broker === 'kiwoom' || broker === 'kis') {
+    try {
+      if (btn) btn.disabled = true;
+      const res = await fetch(`/api/accounts/${accId}/broker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker, enabled })
+      });
+      const data = await res.json();
+      showToast(data.message || '설정이 저장되었습니다.');
+      await loadAccounts(false);
+      await loadTabBrokerSettings(accId);
+    } catch (e) {
+      showToast('설정 저장 실패: ' + e.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+    return;
+  }
+
+  // 2. 메리츠증권 - 자동매매가 OFF이고 키 변경 없이 저장만 하는 경우
+  if (!enabled && !appKey && !appSecret) {
+    try {
+      if (btn) btn.disabled = true;
+      const res = await fetch(`/api/accounts/${accId}/broker`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broker: 'meritz', enabled: false })
+      });
+      const data = await res.json();
+      showToast('자동매매가 비활성화되었습니다.');
+      await loadAccounts(false);
+      await loadTabBrokerSettings(accId);
+    } catch (e) {
+      showToast('설정 저장 실패: ' + e.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+    return;
+  }
+
+  // 3. 메리츠증권 - Check & Save 검증 및 저장
+  try {
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = '⏳ 메리츠 Open API 검증 중...';
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      resultBox.style.background = 'rgba(56, 189, 248, 0.12)';
+      resultBox.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+      resultBox.style.color = 'var(--accent-cyan)';
+      resultBox.innerHTML = '메리츠증권 Open API에 접속하여 연동 검증을 진행하고 있습니다...';
+    }
+
+    const res = await fetch(`/api/accounts/${accId}/broker`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        broker: 'meritz',
+        enabled,
+        app_key: appKey,
+        app_secret: appSecret
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      const errMsg = data.detail || data.message || '인증 검증 실패';
+      if (resultBox) {
+        resultBox.style.display = 'block';
+        resultBox.style.background = 'rgba(239, 68, 68, 0.15)';
+        resultBox.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        resultBox.style.color = '#f87171';
+        resultBox.innerHTML = `<strong>❌ 연동 검증 실패:</strong><br>${errMsg}`;
+      }
+      showToast(`자동매매 설정 저장 실패: ${errMsg}`, 'error');
+      return;
+    }
+
+    // 성공 처리
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      resultBox.style.background = 'rgba(16, 185, 129, 0.15)';
+      resultBox.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+      resultBox.style.color = '#34d399';
+      resultBox.innerHTML = `
+        <strong>🎉 메리츠 Open API 연동 검증 성공!</strong><br>
+        • 설정 상태: ${enabled ? '⚡ 자동매매 활성화 (ON)' : '⏸️ 자동매매 대기 (OFF)'}<br>
+        • 토큰 발급 및 계좌 확인이 정상 완료되었습니다.
+      `;
+    }
+
+    showToast(data.message || '자동매매 설정이 성공적으로 저장되었습니다.');
+    await loadAccounts(false);
+    await loadTabBrokerSettings(accId);
+  } catch (e) {
+    if (resultBox) {
+      resultBox.style.display = 'block';
+      resultBox.style.background = 'rgba(239, 68, 68, 0.15)';
+      resultBox.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+      resultBox.style.color = '#f87171';
+      resultBox.innerHTML = `<strong>❌ 오류 발생:</strong><br>${e.message}`;
+    }
+    showToast('설정 저장 중 통신 오류: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+    onTabBrokerSelectChange();
+  }
+}
+window.handleTabBrokerCheckAndSave = handleTabBrokerCheckAndSave;
+
+// 하위 호환 모달 래퍼 (항상 계좌 설정 탭 내 브로커 설정으로 이동)
+async function openAccountBrokerModal(accId) {
+  goToAccountBrokerSettings(accId);
+}
+window.openAccountBrokerModal = openAccountBrokerModal;
 
 function closeAccountBrokerModal() {
   closeModal('accountBrokerModal');
