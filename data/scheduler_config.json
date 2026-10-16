@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "order_time": "21:00",
+  "settle_time": "05:30",
+  "last_order_date": "",
+  "last_settle_date": null,
+  "last_order_status": "Ready for 21:00 execution",
+  "last_settle_status": null
+}

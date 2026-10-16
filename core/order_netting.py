@@ -525,7 +525,15 @@ def generate_jongjong_orders(
                 AY2 = safe_round4(AU2 * (1.0 + a_val) - 0.01)
                 AY3 = safe_round4(AU2 * (1.0 - C2))
 
+            # 당일 1차 매수가(AY2) 부근(≤ AU2 * 1.01)에서 청산되는 매도 주문과 1차 매수 상계(퉁치기)
+            sell_offset = 0
+            for s in formatted_sells:
+                s_p = float(s.get('price', 0.0))
+                if s_p <= round(AU2 * 1.01, 2) and 'MOC' not in s.get('구분', ''):
+                    sell_offset += int(s.get('qty', 0))
+
             AZ2 = int(AU1 / AY2) if AY2 > 0 else 0
+            primary_az2 = max(0, AZ2 - sell_offset)
 
             AY4 = C4 - 1
             ay_list = [AY2]
@@ -538,7 +546,7 @@ def generate_jongjong_orders(
                         val = round_down(denom, 2) if (AU1 > 0 and denom > 0) else None
                         ay_list.append(val)
 
-            az_list = [AZ2]
+            az_list = [primary_az2]
             for k in range(1, len(ay_list)):
                 if ay_list[k] is None or ay_list[k-1] is None or ay_list[k] <= 0 or ay_list[k-1] <= 0:
                     az_list.append(0)

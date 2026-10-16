@@ -80,6 +80,7 @@ def _summarize_account(acc: dict, owner: str):
             "last_status": acc.get("auto_trade", {}).get("last_status", ""),
             "last_message": acc.get("auto_trade", {}).get("last_message", "")
         },
+        "season_info": details.get("season_info")
     }
     return item, asset, cash, seed
 
@@ -209,6 +210,7 @@ async def get_account_detail(acc_id: str, request: Request):
             "sell_orders": details_clean.get("sell_orders", []),
             "netting_info": details_clean.get("netting_info", {}),
         },
+        "season_info": details_clean.get("season_info"),
         "unsold_lots": details_clean.get("unsold_lots", []),
         "trade_records": trade_records[-100:],
         "adjustments": target.get("adjustments", []),

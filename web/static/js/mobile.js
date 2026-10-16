@@ -194,6 +194,7 @@ function renderDashboard() {
 
 function renderAccountItemHtml(acc) {
   const isProfit = acc.total_profit >= 0;
+  const si = acc.season_info;
   return `
     <div class="m-account-item" onclick="openAccountDetail('${acc.id}')">
       <div class="m-acc-header">
@@ -201,7 +202,10 @@ function renderAccountItemHtml(acc) {
           <span class="m-ticker-badge">${acc.ticker}</span>
           <span class="m-acc-name">${acc.name}</span>
         </div>
-        <span class="m-strat-tag">${acc.strategy}</span>
+        <div style="display:flex;gap:4px;align-items:center;">
+          ${si ? `<span style="font-size:0.7rem;background:rgba(56,189,248,0.15);color:#38bdf8;padding:2px 6px;border-radius:4px;font-weight:700;border:1px solid rgba(56,189,248,0.3);">🗓️ 제${si.season_number}시즌 (${si.season_day}/10일)</span>` : ''}
+          <span class="m-strat-tag">${acc.strategy}</span>
+        </div>
       </div>
       <div class="m-acc-metrics">
         <div>
@@ -217,6 +221,12 @@ function renderAccountItemHtml(acc) {
           </div>
         </div>
       </div>
+      ${si ? `
+      <div style="margin-top:8px;padding-top:6px;border-top:1px dashed rgba(255,255,255,0.08);display:flex;justify-content:space-between;font-size:0.72rem;color:var(--m-text-secondary);">
+        <span>1회 매수가(${si.current_mode}): <strong style="color:var(--m-accent-cyan);">${mFmt.usd(si.daily_p_budget)}</strong></span>
+        <span>잔여: <strong style="color:#34d399;">${mFmt.usd(si.season_remaining_budget)}</strong></span>
+      </div>
+      ` : ''}
     </div>
   `;
 }
@@ -331,8 +341,48 @@ function renderMobileOrders(container, data) {
   const buyOrders = data.orders?.buy_orders || [];
   const sellOrders = data.orders?.sell_orders || [];
   const netting = data.orders?.netting_info;
+  const si = data.season_info || data.details?.season_info;
   
   let html = '';
+
+  // 시즌 운용 현황 카드
+  if (si) {
+    const isExhausted = si.is_budget_exhausted || si.daily_p_budget <= 0;
+    html += `
+      <div style="background:linear-gradient(135deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.95) 100%);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:0.85rem;margin-bottom:0.85rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.6rem;">
+          <div style="font-weight:700;font-size:0.875rem;color:#fff;">🗓️ 제${si.season_number}시즌 (${si.season_day}/10일차)</div>
+          <span style="font-size:0.72rem;color:var(--m-text-secondary);">실원금: ${mFmt.usd(si.season_ar)}</span>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;margin-bottom:0.6rem;text-align:center;">
+          <div style="background:rgba(15,23,42,0.6);padding:6px 4px;border-radius:6px;border:1px solid ${si.current_mode === 'Normal' ? '#38bdf8' : 'rgba(255,255,255,0.06)'};">
+            <div style="font-size:0.65rem;color:var(--m-text-muted);">Normal(8)</div>
+            <div style="font-size:0.8rem;font-weight:700;color:${si.current_mode === 'Normal' ? '#38bdf8' : '#e2e8f0'};margin-top:2px;">${mFmt.usd(si.normal_p)}</div>
+          </div>
+          <div style="background:rgba(15,23,42,0.6);padding:6px 4px;border-radius:6px;border:1px solid ${si.current_mode === 'Safe' ? '#fbbf24' : 'rgba(255,255,255,0.06)'};">
+            <div style="font-size:0.65rem;color:var(--m-text-muted);">Safe(7)</div>
+            <div style="font-size:0.8rem;font-weight:700;color:${si.current_mode === 'Safe' ? '#fbbf24' : '#e2e8f0'};margin-top:2px;">${mFmt.usd(si.safe_p)}</div>
+          </div>
+          <div style="background:rgba(15,23,42,0.6);padding:6px 4px;border-radius:6px;border:1px solid ${si.current_mode === 'Riskoff' ? '#f87171' : 'rgba(255,255,255,0.06)'};">
+            <div style="font-size:0.65rem;color:var(--m-text-muted);">Risk-off(5)</div>
+            <div style="font-size:0.8rem;font-weight:700;color:${si.current_mode === 'Riskoff' ? '#f87171' : '#e2e8f0'};margin-top:2px;">${mFmt.usd(si.riskoff_p)}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(56,189,248,0.08);border:1px dashed rgba(56,189,248,0.3);padding:6px 8px;border-radius:6px;font-size:0.75rem;">
+          <div>당일 매수 배정: <strong style="color:var(--m-accent-cyan);">${mFmt.usd(si.daily_p_budget)}</strong></div>
+          <div style="color:var(--m-text-muted);">시즌 잔여: <strong style="color:#34d399;">${mFmt.usd(si.season_remaining_budget)}</strong></div>
+        </div>
+
+        ${isExhausted ? `
+        <div style="margin-top:6px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.35);border-radius:6px;padding:6px 8px;color:#fca5a5;font-size:0.72rem;">
+          ⚠️ 이번 10일 시즌의 매수 예산이 소진되어 오늘 매수는 없으며 관망 대기합니다.
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }
   
   // 상계 요약 배너
   if (netting && netting.needs_action) {

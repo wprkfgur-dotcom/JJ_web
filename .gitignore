@@ -56,3 +56,8 @@ data/accounts.json.tmp
 data/cloud_sync_config.json
 data/meritz_config.json
 data/.secret_key
+scratch/
+remote_check_output.txt
+check_orders_remote.py
+fix_record_1015.py
+update_1015_close_price.py

@@ -472,7 +472,11 @@ function renderAccountsGrid(accounts) {
     const isAutoOn = acc.auto_trade && acc.auto_trade.enabled;
     const autoTradeBadge = isAutoOn
       ? `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">🤖 자동 ON (${acc.auto_trade.broker || 'meritz'})</span>`
-      : `<span class="badge" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border: 1px solid rgba(148, 163, 184, 0.2);">⚪ 자동 OFF</span>`;
+      : '';
+    const si = acc.season_info;
+    const seasonBadge = si 
+      ? `<span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 600;">🗓️ 제${si.season_number}시즌 (${si.season_day}/10일차)</span>`
+      : '';
 
     return `
       <div class="account-card" onclick="openAccountDetailModal('${acc.id}')">
@@ -481,6 +485,7 @@ function renderAccountsGrid(accounts) {
             <div class="card-title">
               <h3>${acc.name}</h3>
               <div style="margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap;">
+                ${seasonBadge}
                 ${autoTradeBadge}
                 <span class="badge badge-ticker">${acc.ticker}</span>
                 <span class="badge ${modeClass}">${acc.mode}</span>
@@ -510,6 +515,19 @@ function renderAccountsGrid(accounts) {
               <div class="lbl">초기 원금</div>
               <div class="val">${fmt.usd(acc.initial_seed)}</div>
             </div>
+            ${si ? `
+            <div class="metric-item" style="grid-column: span 2; background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.15); margin-top: 4px;">
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 4px;">
+                <span style="color: var(--text-muted); font-weight: 600;">1회 매수금(P)</span>
+                <span style="color: var(--accent-cyan); font-weight: 700;">당일 배정: ${fmt.usd(si.daily_p_budget)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.73rem;">
+                <span style="${si.current_mode === 'Normal' ? 'color:#38bdf8;font-weight:700;' : 'color:var(--text-secondary);'}">Normal(8): ${fmt.usd(si.normal_p)}</span>
+                <span style="${si.current_mode === 'Safe' ? 'color:#fbbf24;font-weight:700;' : 'color:var(--text-secondary);'}">Safe(7): ${fmt.usd(si.safe_p)}</span>
+                <span style="${si.current_mode === 'Riskoff' ? 'color:#f87171;font-weight:700;' : 'color:var(--text-secondary);'}">Risk-off(5): ${fmt.usd(si.riskoff_p)}</span>
+              </div>
+            </div>
+            ` : ''}
           </div>
         </div>
 
@@ -714,7 +732,12 @@ async function openAccountDetailModal(accId, pushHistory = true) {
     if (subTitleEl) {
       const modeText = acc.mode || (data.summary && data.summary.mode) || 'Normal';
       const modeClass = modeText === 'Safe' ? 'badge-mode-safe' : (modeText === 'Riskoff' ? 'badge-mode-riskoff' : 'badge-mode-normal');
+      const siHeader = data.season_info || (data.details && data.details.season_info);
+      const seasonBadgeHtml = siHeader 
+        ? `<span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 600;">🗓️ 제${siHeader.season_number}시즌 (${siHeader.season_day}/10일차)</span>`
+        : '';
       subTitleEl.innerHTML = `
+        ${seasonBadgeHtml}
         <span class="badge badge-ticker">${acc.ticker}</span>
         <span class="badge ${modeClass}">${modeText}</span>
         <span style="color: var(--text-secondary); margin-left: 6px;">${acc.strategy}</span>
@@ -809,6 +832,7 @@ function renderDetailSubTabs(data) {
   const records = data.trade_records || [];
   const adjustments = data.adjustments || [];
   const parseFn = typeof parseOrderItem === 'function' ? parseOrderItem : (window.parseOrderItem || ((o, m = '') => ({ p: 0, q: 0, a: 0, m })));
+  const si = data.season_info || (data.details && data.details.season_info) || acc.season_info;
 
   // 1. 주문표 서브탭
   const ordersPane = document.getElementById('subtab-orders');
@@ -816,7 +840,112 @@ function renderDetailSubTabs(data) {
     const buyList = orders.buy_orders || [];
     const sellList = orders.sell_orders || [];
 
+    let seasonBoxHtml = '';
+    if (si) {
+      const curMode = si.current_mode || acc.mode || 'Normal';
+      const isExhausted = si.is_budget_exhausted || si.daily_p_budget <= 0;
+
+      // 10일 차 체크 인디케이터
+      let dayDots = '';
+      for (let d = 1; d <= 10; d++) {
+        let dotBg = 'background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: var(--text-muted);';
+        if (d < si.season_day) {
+          dotBg = 'background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-weight: 700;';
+        } else if (d === si.season_day) {
+          dotBg = 'background: var(--accent-cyan); border: 1px solid var(--accent-cyan); color: #0f172a; font-weight: 800; transform: scale(1.1); box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);';
+        }
+        dayDots += `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+          <div style="width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; ${dotBg}">
+            ${d}
+          </div>
+          <span style="font-size: 0.65rem; color: ${d >= 9 ? '#f87171' : 'var(--text-muted)'}; font-weight: ${d === si.season_day ? '700' : '400'};">${d >= 9 ? '예비/관망' : `${d}일`}</span>
+        </div>`;
+      }
+
+      seasonBoxHtml = `
+        <div style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 1.1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 0.85rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.65rem;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.05rem; font-weight: 700; color: #fff;">🗓️ 제${si.season_number}시즌 운용 현황</span>
+              <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700;">${si.season_day} / 10일차</span>
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-secondary);">
+              시즌 실원금(AR): <strong style="color: #fff;">${fmt.usd(si.season_ar)}</strong> (비상금 AK: ${fmt.usd(si.season_ak)})
+            </div>
+          </div>
+
+          <!-- 10일 타임라인 점 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.6rem 0.5rem; background: rgba(0,0,0,0.25); border-radius: 8px;">
+            ${dayDots}
+          </div>
+
+          <!-- 모드별 1회 매수가 & 잔여 예산 그리드 -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 0.85rem;">
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid ${curMode === 'Normal' ? '#38bdf8' : 'rgba(255,255,255,0.06)'}; ${curMode === 'Normal' ? 'box-shadow: 0 0 10px rgba(56,189,248,0.2);' : ''}">
+              <div style="font-size: 0.72rem; color: var(--text-muted); display:flex; justify-content:space-between;">
+                <span>Normal 모드 (8분할)</span>
+                ${curMode === 'Normal' ? '<span style="color:#38bdf8;font-weight:700;">● 현재모드</span>' : ''}
+              </div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: ${curMode === 'Normal' ? '#38bdf8' : '#e2e8f0'}; margin-top: 3px;">
+                ${fmt.usd(si.normal_p)}
+              </div>
+            </div>
+
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid ${curMode === 'Safe' ? '#fbbf24' : 'rgba(255,255,255,0.06)'}; ${curMode === 'Safe' ? 'box-shadow: 0 0 10px rgba(251,191,36,0.2);' : ''}">
+              <div style="font-size: 0.72rem; color: var(--text-muted); display:flex; justify-content:space-between;">
+                <span>Safe 모드 (7분할)</span>
+                ${curMode === 'Safe' ? '<span style="color:#fbbf24;font-weight:700;">● 현재모드</span>' : ''}
+              </div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: ${curMode === 'Safe' ? '#fbbf24' : '#e2e8f0'}; margin-top: 3px;">
+                ${fmt.usd(si.safe_p)}
+              </div>
+            </div>
+
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid ${curMode === 'Riskoff' ? '#f87171' : 'rgba(255,255,255,0.06)'}; ${curMode === 'Riskoff' ? 'box-shadow: 0 0 10px rgba(248,113,113,0.2);' : ''}">
+              <div style="font-size: 0.72rem; color: var(--text-muted); display:flex; justify-content:space-between;">
+                <span>Risk-off 모드 (5분할)</span>
+                ${curMode === 'Riskoff' ? '<span style="color:#f87171;font-weight:700;">● 현재모드</span>' : ''}
+              </div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: ${curMode === 'Riskoff' ? '#f87171' : '#e2e8f0'}; margin-top: 3px;">
+                ${fmt.usd(si.riskoff_p)}
+              </div>
+            </div>
+
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
+              <div style="font-size: 0.72rem; color: var(--text-muted); display:flex; justify-content:space-between;">
+                <span>시즌 잔여 예산</span>
+                <span style="color:var(--text-muted);">누적:${fmt.usd(si.season_used_budget)}</span>
+              </div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: #34d399; margin-top: 3px;">
+                ${fmt.usd(si.season_remaining_budget)}
+              </div>
+            </div>
+          </div>
+
+          <!-- 당일 매수 배정 안내 배너 -->
+          <div style="display:flex; justify-content:space-between; align-items:center; background: rgba(56, 189, 248, 0.08); border: 1px dashed rgba(56, 189, 248, 0.3); padding: 8px 12px; border-radius: 6px; font-size: 0.82rem;">
+            <div>
+              <span style="color: var(--text-muted);">당일 1회 매수 배정 예산:</span>
+              <strong style="color: var(--accent-cyan); font-size: 0.95rem; margin-left: 4px;">${fmt.usd(si.daily_p_budget)}</strong>
+              ${si.daily_p_budget < si.current_mode_p && si.daily_p_budget > 0 ? '<span style="color:#fbbf24; margin-left:6px;">(⚠️ 시즌 잔여 예산 한도 적용)</span>' : ''}
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.78rem;">
+              모드 전환 및 이전 일자 집행에 따라 남은 예산 범위 내에서만 매수됩니다.
+            </div>
+          </div>
+
+          ${isExhausted ? `
+          <div style="margin-top: 8px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 8px 12px; color: #fca5a5; font-size: 0.82rem; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.1rem;">⚠️</span>
+            <span>이번 10일 시즌의 투자 예산이 전액 소진되었습니다. (9~10일차 또는 분할 한도 도달) 오늘 매수 주문은 발생하지 않으며, 기존 보유분의 매도 주문만 유지하고 관망 대기합니다.</span>
+          </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
     let ordersContent = `
+      ${seasonBoxHtml}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem;">
         <div>
           <span class="badge ${acc.operational_state === 'WAITING_FOR_FILL' ? 'badge-state-waiting' : 'badge-state-done'}">

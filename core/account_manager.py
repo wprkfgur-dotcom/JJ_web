@@ -676,14 +676,14 @@ class AccountManager:
                 if lot_r <= shares_to_sell:
                     lot['Sold'] = True
                     lot['W'] = curr_d_str
-                    lot['X'] = sell_p
+                    lot['X'] = close_p  # 기록은 당일 종가를 기록
                     gross_s = sell_p * lot_r
-                    net_s = gross_s - gross_s * (fee_rate + sec_fee)
+                    net_s = gross_s - gross_s * (fee_rate + sec_fee)  # 예수금 반영 시 실제 수수료/제비용 공제
                     lot['Z'] = round(net_s, 2)
                     p_amt = net_s - float(lot.get('S', 0.0))
                     lot['Profit'] = round(p_amt, 2)
                     bp = float(lot.get('BuyPrice', lot.get('Close', 1.0)))
-                    lot['ProfitRate'] = round((sell_p / bp - 1.0) * 100.0, 2) if bp > 0 else 0.0
+                    lot['ProfitRate'] = round((close_p / bp - 1.0) * 100.0, 2) if bp > 0 else 0.0
                     lot['HoldDays'] = h_days
                     total_profit += p_amt
                     net_sell_proceeds += net_s
@@ -700,14 +700,17 @@ class AccountManager:
 
         # 2. 매수 체결 정산
         buy_q = int(buy_qty)
-        buy_p = round(float(buy_price), 2) if buy_price is not None and buy_price > 0 else close_p
-        gross_b = buy_p * buy_q
+        # 기록은 당일 종가(close_p)를 기록하고, 예수금에는 실제 수수료 포함 금액으로 반영
+        record_buy_p = close_p
+        exec_buy_p = round(float(buy_price), 2) if buy_price is not None and buy_price > 0 else close_p
+        gross_b = exec_buy_p * buy_q
         b_fee = gross_b * fee_rate
-        s_amt = round(gross_b + b_fee, 2)
-        target_yield = get_target_yield(acc.get('strategy'), mode)
-        u_target = round_up(buy_p * (1.0 + target_yield), 2) if buy_q > 0 else None
+        s_amt = round(gross_b + b_fee, 2)  # 예수금 차감 시 수수료 포함
 
-        # 3. 신규 잔고 산출
+        target_yield = get_target_yield(acc.get('strategy'), mode)
+        u_target = round_up(record_buy_p * (1.0 + target_yield), 2) if buy_q > 0 else None
+
+        # 3. 신규 잔고 산출 (예수금에 실제 수수료 반영)
         new_cash = round(max(0.0, prev_cash - s_amt + net_sell_proceeds), 2)
         new_hold = max(0, prev_hold + buy_q - sell_q)
         new_asset = round(new_cash + close_p * new_hold, 2)
@@ -735,9 +738,9 @@ class AccountManager:
             'Mode': mode,
             'R': buy_q,
             'BuyQty': buy_q,
-            'BuyPrice': buy_p,
+            'BuyPrice': record_buy_p,  # 매매 일지 기록은 종가(Close)
             'S': s_amt,
-            'U': u_target,
+            'U': u_target,  # 종가 기준 목표가
             'Sold': False,
             'W': None,
             'X': None,
@@ -1073,13 +1076,63 @@ class AccountManager:
                     print(f"[{ticker}] 익일 모드 정밀 판정 안내 (fallback 사용): {ex}")
                     mode = str(last_row.get('Mode', 'Normal')) if len(last_row) > 0 else 'Normal'
 
+            # 10거래일 시즌 사이클 분석 및 잔여 예산 계산
+            total_recs = len(records)
+            season_number = (total_recs // 10) + 1
+            season_day = (total_recs % 10) + 1  # 1 ~ 10일차
+            season_start_idx = (total_recs // 10) * 10
+            season_records = records[season_start_idx:]
+
             target_yield = strat.target_yields.get(mode, 0.0275)
-            div = strat.div_rounds.get(mode, 8.0)
             reserve_ratio = float(acc.get('reserve_ratio', 0.05))
             ar_val = round(effective_capital * (1.0 - reserve_ratio), 2)
             ak_val = round(effective_capital * reserve_ratio, 2)
-            budget = min(ar_val / div, final_cash) if final_cash >= (ar_val / div) else final_cash
-            budget = max(0.0, budget)
+
+            normal_splits = float(strat.div_rounds.get('Normal', 8.0))
+            safe_splits = float(strat.div_rounds.get('Safe', 7.0))
+            riskoff_splits = float(strat.div_rounds.get('Riskoff', 5.0))
+
+            normal_p = round(ar_val / normal_splits, 2)
+            safe_p = round(ar_val / safe_splits, 2)
+            riskoff_p = round(ar_val / riskoff_splits, 2)
+
+            current_mode_p = safe_p if mode == 'Safe' else (riskoff_p if mode == 'Riskoff' else normal_p)
+
+            # 이번 시즌에 이미 매수 집행된 1회분 배정금 누적액
+            season_used_budget = 0.0
+            for r in season_records:
+                if int(r.get('BuyQty', r.get('R', 0))) > 0:
+                    r_mode = str(r.get('Mode', 'Normal'))
+                    r_div = safe_splits if r_mode == 'Safe' else (riskoff_splits if r_mode == 'Riskoff' else normal_splits)
+                    season_used_budget += (ar_val / r_div)
+
+            season_used_budget = round(season_used_budget, 2)
+            season_remaining_budget = max(0.0, round(ar_val - season_used_budget, 2))
+
+            # 당일 매수 예정금 (budget):
+            # Normal로 7일 보낸 후 Safe 전환 시 남은 1회분만 매수, 잔여 예산 소진 시 9~10일차 매수 불가(0원)
+            budget = min(current_mode_p, season_remaining_budget)
+            budget = max(0.0, round(budget, 2))
+
+            season_info = {
+                'season_number': season_number,
+                'season_day': season_day,
+                'total_days_in_season': 10,
+                'season_ar': ar_val,
+                'season_ak': ak_val,
+                'normal_splits': int(normal_splits),
+                'safe_splits': int(safe_splits),
+                'riskoff_splits': int(riskoff_splits),
+                'normal_p': normal_p,
+                'safe_p': safe_p,
+                'riskoff_p': riskoff_p,
+                'current_mode': mode,
+                'current_mode_p': current_mode_p,
+                'season_used_budget': season_used_budget,
+                'season_remaining_budget': season_remaining_budget,
+                'daily_p_budget': budget,
+                'is_budget_exhausted': bool(budget <= 0.0)
+            }
 
             net_result = generate_jongjong_orders(
                 unsold_lots=unsold_lots,
@@ -1264,6 +1317,7 @@ class AccountManager:
             'buy_orders': buy_orders,
             'unsold_lots': unsold_lots,
             'netting_info': net_result,
+            'season_info': season_info if 'season_info' in locals() else None,
             'df_res': df_res,
             'adjustments': adjustments
         }

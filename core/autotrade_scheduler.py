@@ -243,8 +243,11 @@ async def run_daily_settlement() -> Dict[str, Any]:
 
         filled_buy_qty = 0
         filled_sell_qty = 0
+        buy_total_amount = 0.0
+        sell_total_amount = 0.0
+        api_query_success = False
 
-        # 증권사 체결 내역 조회 시도
+        # 증권사 체결 내역 조회 (실제 OpenAPI 데이터만 신뢰, 최대 3회 재시도)
         if broker == "meritz" and app_key_enc and app_secret_enc:
             try:
                 client = MeritzClient(config_path="/dev/null")
@@ -254,41 +257,51 @@ async def run_daily_settlement() -> Dict[str, Any]:
                     "is_simulation": False,
                     "enabled": True
                 }
-                ord_res = client.get_today_orders()
-                if ord_res.get("success"):
-                    for o in ord_res.get("orders", []):
-                        cq = int(float(o.get("cntg_qty") or o.get("ccld_qty") or 0))
-                        side_cd = str(o.get("seln_byov_clcd") or o.get("sll_buy_dvs_cd") or "")
-                        if cq > 0:
-                            if side_cd in ("02", "BUY", "2"):
-                                filled_buy_qty += cq
-                            elif side_cd in ("01", "SELL", "1"):
-                                filled_sell_qty += cq
+                for attempt in range(3):
+                    ord_res = client.get_today_orders()
+                    if ord_res.get("success"):
+                        api_query_success = True
+                        for o in ord_res.get("orders", []):
+                            cq = int(float(o.get("cntg_qty") or o.get("ccld_qty") or 0))
+                            cp = float(o.get("cntg_crnc_prc") or o.get("cntg_prc") or 0.0)
+                            camt = float(o.get("cntg_camt") or 0.0)
+                            if camt <= 0.0 and cq > 0 and cp > 0:
+                                camt = round(cq * cp, 2)
+
+                            side_cd = str(o.get("seln_byov_clcd") or o.get("sll_buy_dvs_cd") or "")
+                            if cq > 0:
+                                if side_cd in ("02", "BUY", "2"):
+                                    filled_buy_qty += cq
+                                    buy_total_amount += camt
+                                elif side_cd in ("01", "SELL", "1"):
+                                    filled_sell_qty += cq
+                                    sell_total_amount += camt
+                        break
+                    else:
+                        print(f"[Scheduler] 계좌 [{acc_name}] 메리츠 체결 조회 재시도 ({attempt+1}/3): {ord_res.get('message')}")
+                        await asyncio.sleep(5)
             except Exception as ex:
                 print(f"[Scheduler] 계좌 [{acc_name}] 메리츠 체결 조회 오류: {ex}")
 
-        # 만약 API 체결 수량이 0인 경우, 전일 LOC 조건으로 체결 판별 (종가 기준 LOC 체결 판정)
-        if filled_buy_qty == 0 and filled_sell_qty == 0:
-            details = am.compute_account_details(acc)
-            for b in (details.get("buy_orders") or []):
-                bp = float(b.get("price", 0.0))
-                bq = int(b.get("qty", 0))
-                if bp >= close_price and bq > 0:
-                    filled_buy_qty += bq
+        # 실제 체결단가 계산 (가중평균, 미체결 시 종가 사용)
+        actual_buy_price = round(buy_total_amount / filled_buy_qty, 2) if filled_buy_qty > 0 else close_price
+        actual_sell_price = round(sell_total_amount / filled_sell_qty, 2) if filled_sell_qty > 0 else close_price
 
-            for s in (details.get("sell_orders") or []):
-                sp = float(s.get("price", 0.0))
-                sq = int(s.get("qty", 0))
-                if sp <= close_price and sq > 0:
-                    filled_sell_qty += sq
+        # 2. 결산 실행 (OpenAPI 연동 계좌는 임의 추정 없이 실제 체결 내역만 기록)
+        settle_memo = (
+            f"OpenAPI 실체결 정산 (매수 {filled_buy_qty}주 @ ${actual_buy_price:.2f}, 매도 {filled_sell_qty}주)"
+            if api_query_success else
+            f"자동 결산 (체결 매수 {filled_buy_qty}주, 매도 {filled_sell_qty}주)"
+        )
 
-        # 2. 결산 실행
         settle_res = am.record_daily_close(
             acc_id=acc_id,
             close_price=close_price,
             buy_qty=filled_buy_qty,
+            buy_price=actual_buy_price,
             sell_qty=filled_sell_qty,
-            memo=f"05:10 자동 결산 (체결 매수 {filled_buy_qty}주, 매도 {filled_sell_qty}주)"
+            sell_price=actual_sell_price,
+            memo=settle_memo
         )
 
         # 3. 다음 거래일로 자동 진행 (Next Day Advance)
@@ -302,12 +315,12 @@ async def run_daily_settlement() -> Dict[str, Any]:
 
         # 5. 텔레그램 결산 및 익일 주문표 알림
         settle_lines = [
-            f"<b>🌅 [JJ Invest] 05:10 일일 정산 및 익일 진행 완료</b>",
+            f"<b>🌅 [JJ Invest] 일일 결산 및 익일 진행 완료 ({now_kst.strftime('%H:%M')})</b>",
             "━━━━━━━━━━━━━━━━━━━━━━",
             f"💼 <b>계좌명</b>: {acc_name}",
             f"🎯 <b>종목</b>: <code>{ticker}</code> | <b>마감 종가</b>: <b>${close_price:,.2f}</b>",
-            f"📥 <b>실제 매수 체결</b>: <b>{filled_buy_qty:,}주</b>",
-            f"📤 <b>실제 매도 체결</b>: <b>{filled_sell_qty:,}주</b>",
+            f"📥 <b>실제 매수 체결</b>: <b>{filled_buy_qty:,}주</b> (@ ${actual_buy_price:,.2f})" if filled_buy_qty > 0 else f"📥 <b>실제 매수 체결</b>: 0주",
+            f"📤 <b>실제 매도 체결</b>: <b>{filled_sell_qty:,}주</b> (@ ${actual_sell_price:,.2f})" if filled_sell_qty > 0 else f"📤 <b>실제 매도 체결</b>: 0주",
             f"💰 <b>정산 후 자산</b>: ${updated_acc.get('total_asset', 0.0):,.2f}",
             "",
             f"⏩ <b>새 운용일 진행</b>: <code>{next_date}</code>",
@@ -370,17 +383,17 @@ async def scheduler_background_loop():
                 current_hm = now_kst.strftime("%H:%M")
                 today_str = now_kst.strftime("%Y-%m-%d")
 
-                order_target = cfg.get("order_time", "20:20").strip()
-                settle_target = cfg.get("settle_time", "05:10").strip()
+                order_target = cfg.get("order_time", "21:00").strip()
+                settle_target = cfg.get("settle_time", "05:30").strip()
 
-                # 1. 주문 실행 시간 체크 (한국시간 20:20)
+                # 1. 주문 실행 시간 체크
                 if current_hm == order_target and cfg.get("last_order_date") != today_str:
                     cfg["last_order_date"] = today_str
                     save_scheduler_config(cfg)
                     print(f"[Scheduler] 🎯 주문 예약 시각 도달 ({order_target}) -> 주문 실행")
                     await run_daily_orders(dry_run=False)
 
-                # 2. 아침 정산 시간 체크 (한국시간 05:10)
+                # 2. 아침 정산 시간 체크 (기본 한국시간 05:30)
                 if current_hm == settle_target and cfg.get("last_settle_date") != today_str:
                     cfg["last_settle_date"] = today_str
                     save_scheduler_config(cfg)
