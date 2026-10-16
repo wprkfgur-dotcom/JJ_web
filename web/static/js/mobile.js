@@ -659,12 +659,16 @@ async function mOpenSettlementModal() {
   try {
     const res = await mApi(`/api/accounts/${accId}/settlement-preview`);
     if (res && res.success) {
-      if (closeEl && res.close_price) closeEl.value = Number(res.close_price).toFixed(2);
-      if (buyPriceEl && res.close_price) buyPriceEl.value = Number(res.close_price).toFixed(2);
-      if (sellPriceEl && res.close_price) sellPriceEl.value = Number(res.close_price).toFixed(2);
+      const hasClose = res.close_price && Number(res.close_price) > 0;
+      if (closeEl) closeEl.value = hasClose ? Number(res.close_price).toFixed(2) : '';
+      if (buyPriceEl) buyPriceEl.value = hasClose ? Number(res.close_price).toFixed(2) : '';
+      if (sellPriceEl) sellPriceEl.value = hasClose ? Number(res.close_price).toFixed(2) : '';
       if (buyQtyEl) buyQtyEl.value = res.suggested_buy_qty !== undefined ? res.suggested_buy_qty : 0;
       if (sellQtyEl) sellQtyEl.value = res.suggested_sell_qty !== undefined ? res.suggested_sell_qty : 0;
-      mToast(`💡 ${res.close_source} ($${res.close_price}) 및 체결량 자동 입력됨`);
+      const dateLabel = res.target_date ? `${res.target_date} ` : '';
+      if (hasClose) {
+        mToast(`💡 ${dateLabel}종가($${Number(res.close_price).toFixed(2)}) 및 체결량 자동 입력됨`);
+      }
     }
   } catch (e) {
     console.error('모바일 정산 프리뷰 로드 실패:', e);

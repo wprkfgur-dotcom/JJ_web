@@ -310,24 +310,68 @@ async def get_settlement_preview(acc_id: str, request: Request):
     # 계좌 상세 계산 (주문표 및 슬롯)
     details = am.compute_account_details(target)
 
-    # 1. 종가 조회 (전역 캐시 최우선 -> 세부 계산 시세)
-    cached = get_cached_close(ticker, target_date)
-    if not cached:
-        cached = get_cached_close(ticker)
-
+    # 1. 종가 조회 (정산 마감일 target_date 기준 엄격 조회)
     close_price = None
-    close_source = "실시간 시세"
+    close_source = "직접 입력 필요"
     close_updated_at = None
 
-    if cached and cached.get("close_price"):
-        close_price = float(cached["close_price"])
-        close_source = f"전역 캐시 ({cached.get('source', '시스템')})"
-        close_updated_at = cached.get("updated_at")
+    if target_date:
+        # 1-A. 전역 캐시에서 해당 정산일 종가 우선 확인
+        cached = get_cached_close(ticker, target_date)
+        if cached and cached.get("close_price"):
+            close_price = float(cached["close_price"])
+            close_source = f"전역 캐시 ({cached.get('source', '시스템')})"
+            close_updated_at = cached.get("updated_at")
+
+        # 1-B. 전역 캐시에 없으면 로컬 시세 DB에서 해당 정산일 종가 정확 조회
+        if not close_price:
+            try:
+                from core.data import get_exact_price_from_db
+                db_p = get_exact_price_from_db(ticker, target_date)
+                if db_p and db_p > 0:
+                    close_price = float(db_p)
+                    close_source = f"시세 DB ({target_date})"
+                    set_cached_close(ticker, close_price, date_str=target_date, source=f"시세 DB ({target_date})")
+            except Exception as ex:
+                print(f"[SettlementPreview] DB 시세 조회 안내: {ex}")
+
+        # 1-C. 다른 계좌들의 매매일지(trades)에서 해당 정산일의 종가(BuyPrice) 탐색
+        if not close_price:
+            try:
+                all_accs = am.load_accounts()
+                for a in all_accs:
+                    if a.get("ticker", "").upper() == ticker:
+                        for tr in a.get("trades", []):
+                            if tr.get("date") == target_date:
+                                bp = float(tr.get("buy_price") or tr.get("close_price") or 0.0)
+                                if bp > 0:
+                                    close_price = bp
+                                    close_source = f"기록 공유 ({a.get('name', '타 계좌')})"
+                                    set_cached_close(ticker, close_price, date_str=target_date, source=f"계좌({a.get('name')}) 일지")
+                                    break
+                    if close_price:
+                        break
+            except Exception as ex:
+                print(f"[SettlementPreview] 계좌 일지 탐색 안내: {ex}")
+
+        # 1-D. 여전히 없으면 미국 마감 시장 데이터 동기화 시도
+        if not close_price:
+            try:
+                from core.data import get_exact_stock_price_for_date
+                exact_p = get_exact_stock_price_for_date(ticker, target_date)
+                if exact_p and exact_p > 0:
+                    close_price = float(exact_p)
+                    close_source = f"거래일 마감 시세 ({target_date})"
+                    set_cached_close(ticker, close_price, date_str=target_date, source=f"시장 데이터 ({target_date})")
+            except Exception as ex:
+                print(f"[SettlementPreview] 마감 시세 동기화 안내: {ex}")
     else:
-        close_price = float(details.get("current_price", 0.0) or 0.0)
-        close_source = "당일 계산 시세"
-        if close_price > 0:
-            set_cached_close(ticker, close_price, date_str=target_date, source="계좌 시세 자동감지")
+        # target_date가 없는 예외적인 경우에만 최신 전역 캐시 참조
+        cached = get_cached_close(ticker)
+        if cached and cached.get("close_price"):
+            close_price = float(cached["close_price"])
+            close_source = f"전역 캐시 ({cached.get('source', '최신')})"
+            close_updated_at = cached.get("updated_at")
 
     # 2. 체결 매수량 / 매도량 자동 산출
     suggested_buy_qty = 0

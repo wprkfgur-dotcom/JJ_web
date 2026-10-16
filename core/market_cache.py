@@ -86,9 +86,10 @@ def set_cached_close(ticker: str, close_price: float, date_str: str = None, sour
 
 def get_cached_close(ticker: str, date_str: str = None) -> Optional[Dict[str, Any]]:
     """
-    시스템 전역 변수에서 종목의 최신 종가를 조회합니다.
-    1) 날짜가 주어지면 (ticker_date) 일치 항목 우선
-    2) 없으면 해당 종목의 가장 최근 등록된 종가 반환
+    시스템 전역 변수에서 종목의 종가를 조회합니다.
+    1) date_str이 명시된 경우: 반드시 해당 날짜(date == date_str)의 캐시 항목만 반환합니다.
+       (해당 날짜의 데이터가 없으면 다른 날짜의 종가를 반환하지 않고 None을 반환)
+    2) date_str이 생략된 경우(None): 해당 종목의 가장 최근 등록된 종가를 반환합니다.
     """
     global _GLOBAL_PRICE_CACHE
     if not _GLOBAL_PRICE_CACHE:
@@ -102,7 +103,16 @@ def get_cached_close(ticker: str, date_str: str = None) -> Optional[Dict[str, An
         if exact_key in _GLOBAL_PRICE_CACHE:
             return _GLOBAL_PRICE_CACHE[exact_key]
 
-    # 종목 키로 조회
+        # 종목 대표 캐시가 있을 경우, 그 캐시의 날짜가 일치할 때만 허용
+        if ticker_clean in _GLOBAL_PRICE_CACHE:
+            entry = _GLOBAL_PRICE_CACHE[ticker_clean]
+            if entry.get("date") == d_clean:
+                return entry
+
+        # 날짜가 지정되었는데 일치하는 데이터가 없으면 다른 날짜 것을 반환하면 안 됨!
+        return None
+
+    # date_str이 None일 때만 가장 최근 등록된 종가 반환
     if ticker_clean in _GLOBAL_PRICE_CACHE:
         return _GLOBAL_PRICE_CACHE[ticker_clean]
 

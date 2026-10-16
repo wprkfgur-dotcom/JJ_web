@@ -1894,8 +1894,9 @@ async function openSettlementModal(accId) {
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
-        if (closeInput && data.close_price) {
-          closeInput.value = Number(data.close_price).toFixed(2);
+        const dateLabel = data.target_date ? `${data.target_date}` : '정산일';
+        if (closeInput) {
+          closeInput.value = (data.close_price && Number(data.close_price) > 0) ? Number(data.close_price).toFixed(2) : '';
         }
         if (buyInput) {
           buyInput.value = data.suggested_buy_qty !== undefined ? data.suggested_buy_qty : 0;
@@ -1911,7 +1912,11 @@ async function openSettlementModal(accId) {
         }
         if (banner && bannerText) {
           banner.style.display = 'block';
-          bannerText.innerHTML = `💡 <strong>자동 완성됨:</strong> ${data.close_source} 기준 종가($${data.close_price}) 및 수량이 미리 입력되었습니다. 필요 시 수정 후 [정산 완료]를 눌러주세요.`;
+          if (data.close_price && Number(data.close_price) > 0) {
+            bannerText.innerHTML = `💡 <strong>자동 완성됨:</strong> ${dateLabel} 마감 종가($${Number(data.close_price).toFixed(2)}) 및 수량이 미리 입력되었습니다. 필요 시 수정 후 [정산 완료]를 눌러주세요.`;
+          } else {
+            bannerText.innerHTML = `⚠️ <strong>종가 직접 입력 필요:</strong> ${dateLabel} 마감 종가를 직접 입력 후 [정산 완료]를 눌러주세요.`;
+          }
         }
       }
     }
