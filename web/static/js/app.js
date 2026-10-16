@@ -1624,8 +1624,7 @@ function openRenameAccountModal(accId, curName) {
   if (input) {
     input.value = curName || '';
   }
-  modal.classList.add('active');
-  modal.style.display = 'flex';
+  openModal('renameAccountModal');
   setTimeout(() => { if (input) input.focus(); }, 50);
 }
 window.openRenameAccountModal = openRenameAccountModal;
@@ -1668,8 +1667,7 @@ function openDeleteAccountModal(accId, curName) {
   const nameEl = document.getElementById('delete-acc-name-text');
   if (idInput) idInput.value = accId;
   if (nameEl) nameEl.textContent = `[${curName || '선택한 계좌'}]`;
-  modal.classList.add('active');
-  modal.style.display = 'flex';
+  openModal('deleteAccountModal');
 }
 window.openDeleteAccountModal = openDeleteAccountModal;
 
@@ -1744,8 +1742,7 @@ function openSettlementModal(accId) {
   const modal = document.getElementById('settlementModal');
   if (!modal) return;
   document.getElementById('settle-acc-id').value = accId;
-  modal.classList.add('active');
-  modal.style.display = 'flex';
+  openModal('settlementModal');
 }
 
 async function submitSettlement() {
@@ -1817,8 +1814,7 @@ function openEditTradeModal(accId, dateStr, close, buyQty, sellQty, mode, memo) 
   document.getElementById('edit-trade-mode').value = mLower === 'safe' ? 'Safe' : (mLower.includes('risk') ? 'Riskoff' : 'Normal');
   document.getElementById('edit-trade-memo').value = memo || '';
 
-  modal.classList.add('active');
-  modal.style.display = 'flex';
+  openModal('editTradeModal');
 }
 
 async function submitEditTradeRecord() {
@@ -1867,8 +1863,7 @@ function openAdjustmentModal(accId) {
   if (!modal) return;
   document.getElementById('adj-acc-id').value = accId;
   document.getElementById('adj-date').value = new Date().toISOString().substring(0, 10);
-  modal.classList.add('active');
-  modal.style.display = 'flex';
+  openModal('adjustmentModal');
 }
 
 async function submitAdjustment() {
@@ -1905,8 +1900,7 @@ function openNewAccountModal() {
   const modal = document.getElementById('newAccountModal');
   if (!modal) return;
   document.getElementById('new-acc-start-date').value = new Date().toISOString().substring(0, 10);
-  modal.classList.add('active');
-  modal.style.display = 'flex';
+  openModal('newAccountModal');
 }
 
 async function submitNewAccount() {
@@ -1946,13 +1940,30 @@ async function submitNewAccount() {
   }
 }
 
-function closeModal(id) {
-  const modal = document.getElementById(id);
-  if (modal) {
-    modal.classList.remove('active');
-    modal.style.display = 'none';
-  }
+function openModal(id) {
+  const modal = typeof id === 'string' ? document.getElementById(id) : id;
+  if (!modal) return;
+  modal.style.display = 'flex';
+  modal.classList.add('active');
 }
+window.openModal = openModal;
+
+function closeModal(id) {
+  const modal = typeof id === 'string' ? document.getElementById(id) : id;
+  if (!modal) return;
+  modal.classList.remove('active');
+  modal.style.display = 'none';
+}
+window.closeModal = closeModal;
+
+// ESC 키 입력 시 열려있는 모든 모달 닫기
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.active, .modal-overlay[style*="display: flex"]').forEach(m => {
+      closeModal(m.id);
+    });
+  }
+});
 
 // -------------------------------------------------------------------
 // 계좌별 자동매매 & 브로커 연동 모달 (Broker Settings Modal)
@@ -2016,7 +2027,7 @@ async function openAccountBrokerModal(accId) {
     onAutoTradeToggleChange();
     onBrokerSelectChange();
 
-    modal.style.display = 'flex';
+    openModal('accountBrokerModal');
   } catch (e) {
     console.error('브로커 설정 로드 실패:', e);
     showToast('계좌 브로커 설정을 불러오지 못했습니다.', 'error');
@@ -2024,8 +2035,7 @@ async function openAccountBrokerModal(accId) {
 }
 
 function closeAccountBrokerModal() {
-  const modal = document.getElementById('accountBrokerModal');
-  if (modal) modal.style.display = 'none';
+  closeModal('accountBrokerModal');
   currentBrokerAccId = null;
 }
 
@@ -2573,7 +2583,7 @@ async function openSyncSettingsModal() {
   }
 
   switchSettingTab('tg'); // 기본으로 텔레그램 알림 탭 활성화
-  document.getElementById('cloudSyncModal').classList.add('active');
+  openModal('cloudSyncModal');
 
   // 1. 텔레그램 설정 로드
   try {

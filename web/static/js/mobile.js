@@ -644,7 +644,7 @@ function mOpenSettlementModal() {
   document.getElementById('m-settle-buy-price').value = d.details?.current_price || '';
   document.getElementById('m-settle-sell-qty').value = '';
   document.getElementById('m-settle-sell-price').value = d.details?.current_price || '';
-  document.getElementById('m-modal-settle').classList.add('active');
+  mOpenModal('m-modal-settle');
 }
 
 async function mSubmitSettlement(e) {
@@ -715,8 +715,15 @@ async function mDeleteAccount() {
   }
 }
 
+function mOpenModal(id) {
+  const el = typeof id === 'string' ? document.getElementById(id) : id;
+  if (!el) return;
+  el.style.display = 'flex';
+  el.classList.add('active');
+}
+
 function mCloseModal(id) {
-  const el = document.getElementById(id);
+  const el = typeof id === 'string' ? document.getElementById(id) : id;
   if (el) {
     el.classList.remove('active');
     el.style.display = 'none';
@@ -786,8 +793,7 @@ async function mOpenBrokerModal() {
     mOnAutoTradeToggleChange();
     mOnBrokerSelectChange();
 
-    modal.style.display = 'flex';
-    modal.classList.add('active');
+    mOpenModal('m-modal-broker');
   } catch (e) {
     mToast('브로커 설정을 불러오지 못했습니다: ' + e.message, true);
   }

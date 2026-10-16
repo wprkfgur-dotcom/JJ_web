@@ -706,7 +706,7 @@
 
 
   <!-- 2. 신규 계좌 개설 모달 -->
-  <div class="modal-overlay" id="newAccountModal">
+  <div class="modal-overlay" id="newAccountModal" onclick="if(event.target===this) closeModal('newAccountModal')">
     <div class="modal-content">
       <div class="modal-header">
         <h2>새 투자 계좌 개설</h2>
@@ -823,7 +823,7 @@
   </div>
 
   <!-- 5. 시스템 환경설정 & 알림 모달 -->
-  <div class="modal-overlay" id="cloudSyncModal">
+  <div class="modal-overlay" id="cloudSyncModal" onclick="if(event.target===this) closeModal('cloudSyncModal')">
     <div class="modal-content" style="max-width: 820px;">
       <div class="modal-header">
         <h2>⚙️ 시스템 연동 및 환경설정</h2>
@@ -1299,6 +1299,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.5.9"></script>
+  <script src="/static/js/app.js?v=2.6.0"></script>
 </body>
 </html>
