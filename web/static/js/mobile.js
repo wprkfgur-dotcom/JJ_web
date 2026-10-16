@@ -636,15 +636,39 @@ function mOpenCreateAccountModal() {
   mToast('계좌 등록은 PC 버전에서 이용해주세요. (?view=pc)', true);
 }
 
-function mOpenSettlementModal() {
+async function mOpenSettlementModal() {
   const d = mState.currentAccountData;
-  if (!d) return;
-  document.getElementById('m-settle-close').value = d.details?.current_price || '';
-  document.getElementById('m-settle-buy-qty').value = '';
-  document.getElementById('m-settle-buy-price').value = d.details?.current_price || '';
-  document.getElementById('m-settle-sell-qty').value = '';
-  document.getElementById('m-settle-sell-price').value = d.details?.current_price || '';
+  if (!d || !d.account) return;
+  const accId = d.account.id;
+
+  const closeEl = document.getElementById('m-settle-close');
+  const buyQtyEl = document.getElementById('m-settle-buy-qty');
+  const buyPriceEl = document.getElementById('m-settle-buy-price');
+  const sellQtyEl = document.getElementById('m-settle-sell-qty');
+  const sellPriceEl = document.getElementById('m-settle-sell-price');
+
+  if (closeEl) closeEl.value = d.details?.current_price || '';
+  if (buyQtyEl) buyQtyEl.value = '0';
+  if (buyPriceEl) buyPriceEl.value = d.details?.current_price || '';
+  if (sellQtyEl) sellQtyEl.value = '0';
+  if (sellPriceEl) sellPriceEl.value = d.details?.current_price || '';
+
   mOpenModal('m-modal-settle');
+
+  // 백엔드 전역 캐시 종가 및 체결량 프리뷰 조회
+  try {
+    const res = await mApi(`/api/accounts/${accId}/settlement-preview`);
+    if (res && res.success) {
+      if (closeEl && res.close_price) closeEl.value = Number(res.close_price).toFixed(2);
+      if (buyPriceEl && res.close_price) buyPriceEl.value = Number(res.close_price).toFixed(2);
+      if (sellPriceEl && res.close_price) sellPriceEl.value = Number(res.close_price).toFixed(2);
+      if (buyQtyEl) buyQtyEl.value = res.suggested_buy_qty !== undefined ? res.suggested_buy_qty : 0;
+      if (sellQtyEl) sellQtyEl.value = res.suggested_sell_qty !== undefined ? res.suggested_sell_qty : 0;
+      mToast(`💡 ${res.close_source} ($${res.close_price}) 및 체결량 자동 입력됨`);
+    }
+  } catch (e) {
+    console.error('모바일 정산 프리뷰 로드 실패:', e);
+  }
 }
 
 async function mSubmitSettlement(e) {

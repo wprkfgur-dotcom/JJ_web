@@ -433,9 +433,22 @@ def get_exact_stock_price_for_date(ticker: str, target_date: str):
 
     cache_key = (ticker.upper(), target_clean)
 
+    # 0. 시스템 전역 변수 우선 조회 (0.0001s, 야후 조회 원천 차단)
+    try:
+        from core.market_cache import get_cached_close, set_cached_close
+        mem_cached = get_cached_close(ticker, target_clean)
+        if mem_cached and mem_cached.get("close_price"):
+            return float(mem_cached["close_price"])
+    except Exception:
+        pass
+
     # 1. 로컬 DB에서 정확한 날짜 종가 조회 (초고속 0.001s)
     db_p = get_exact_price_from_db(ticker, target_clean)
     if db_p is not None and db_p > 0:
+        try:
+            set_cached_close(ticker, db_p, date_str=target_clean, source="로컬 시세 DB")
+        except Exception:
+            pass
         return db_p
 
     # 2. 미국 정규장이 아직 마감되지 않은 날짜(오늘, 미래, 주말)이거나 이미 확인 실패한 경우 즉시 스킵 (0.0001s)

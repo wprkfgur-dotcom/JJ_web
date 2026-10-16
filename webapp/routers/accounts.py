@@ -4,6 +4,9 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from core.telegram_notifier import notify_order_generation
+from core.market_cache import get_cached_close, set_cached_close
+from core.meritz_client import MeritzClient
+from core.security import decrypt_credential
 
 from ..config import DEFAULT_OWNER, am
 from ..schemas import (
@@ -290,6 +293,116 @@ async def advance_account_day(acc_id: str, request: Request):
 
     _notify_orders(res)
     return {"success": True, "account": res}
+
+
+@router.get("/{acc_id}/settlement-preview")
+async def get_settlement_preview(acc_id: str, request: Request):
+    """
+    일일 마감 정산(종가 & 체결 입력) 팝업 시 종가, 매수량, 매도량을 자동 계산하여 프리뷰 제공.
+    1) 종가: 시스템 전역 캐시(메리츠/야후/정산 등 누군가 1회라도 확인한 종가)를 최우선 제공.
+    2) 체결량: 메리츠 OpenAPI 연동 계좌면 당일 실체결 내역 조회, 미연동 시 당일 주문표 기반 예상 체결량 산출.
+    3) 사용자가 최종 확인 후 자유롭게 수정 가능.
+    """
+    target = get_owned_account(acc_id, request, "본인의 계좌만 조회할 수 있습니다.")
+    ticker = target.get("ticker", "SOXL").upper().strip()
+    target_date = target.get("current_date")
+
+    # 계좌 상세 계산 (주문표 및 슬롯)
+    details = am.compute_account_details(target)
+
+    # 1. 종가 조회 (전역 캐시 최우선 -> 세부 계산 시세)
+    cached = get_cached_close(ticker, target_date)
+    if not cached:
+        cached = get_cached_close(ticker)
+
+    close_price = None
+    close_source = "실시간 시세"
+    close_updated_at = None
+
+    if cached and cached.get("close_price"):
+        close_price = float(cached["close_price"])
+        close_source = f"전역 캐시 ({cached.get('source', '시스템')})"
+        close_updated_at = cached.get("updated_at")
+    else:
+        close_price = float(details.get("current_price", 0.0) or 0.0)
+        close_source = "당일 계산 시세"
+        if close_price > 0:
+            set_cached_close(ticker, close_price, date_str=target_date, source="계좌 시세 자동감지")
+
+    # 2. 체결 매수량 / 매도량 자동 산출
+    suggested_buy_qty = 0
+    suggested_sell_qty = 0
+    suggested_memo = ""
+    is_api_filled = False
+
+    # 2-A. 메리츠 OpenAPI 연동 계좌인 경우 실제 체결 내역 조회 시도
+    auto_cfg = target.get("auto_trade", {})
+    if auto_cfg.get("enabled") and auto_cfg.get("broker") == "meritz" and auto_cfg.get("app_key_enc") and auto_cfg.get("app_secret_enc"):
+        try:
+            client = MeritzClient(config_path="/dev/null")
+            client.config = {
+                "app_key": decrypt_credential(auto_cfg["app_key_enc"]),
+                "app_secret": decrypt_credential(auto_cfg["app_secret_enc"]),
+                "is_simulation": False,
+                "enabled": True
+            }
+            ord_res = client.get_today_orders()
+            if ord_res.get("success"):
+                cq_buy = 0
+                cq_sell = 0
+                for o in ord_res.get("orders", []):
+                    cq = int(float(o.get("cntg_qty") or o.get("ccld_qty") or 0))
+                    side_cd = str(o.get("seln_byov_clcd") or o.get("sll_buy_dvs_cd") or "")
+                    if cq > 0:
+                        if side_cd in ("02", "BUY", "2"):
+                            cq_buy += cq
+                        elif side_cd in ("01", "SELL", "1"):
+                            cq_sell += cq
+                if cq_buy > 0 or cq_sell > 0:
+                    suggested_buy_qty = cq_buy
+                    suggested_sell_qty = cq_sell
+                    suggested_memo = f"메리츠 OpenAPI 실체결 조회 (매수 {cq_buy}주, 매도 {cq_sell}주)"
+                    is_api_filled = True
+        except Exception as ex:
+            print(f"[SettlementPreview] 메리츠 실체결 조회 안내: {ex}")
+
+    # 2-B. 메리츠 실체결이 없거나 미연동인 경우 주문표 기반 예상 체결량 산출
+    if not is_api_filled:
+        orders = details.get("orders", {}).get("orders", [])
+        buy_orders = [o for o in orders if o.get("side") == "BUY"]
+        if buy_orders:
+            fillable_buys = 0
+            for bo in buy_orders:
+                limit_p = float(bo.get("limit_price") or 0.0)
+                if close_price > 0 and close_price <= limit_p:
+                    fillable_buys += int(bo.get("order_qty") or 0)
+            suggested_buy_qty = fillable_buys if fillable_buys > 0 else int(buy_orders[0].get("order_qty") or 0)
+
+        sell_orders = [o for o in orders if o.get("side") == "SELL"]
+        if sell_orders:
+            fillable_sells = 0
+            for so in sell_orders:
+                target_u = float(so.get("target_price") or so.get("limit_price") or 0.0)
+                if close_price > 0 and close_price >= target_u:
+                    fillable_sells += int(so.get("order_qty") or 0)
+            suggested_sell_qty = fillable_sells
+
+        suggested_memo = "당일 주문표 기준 자동 추천"
+
+    return {
+        "success": True,
+        "account_id": acc_id,
+        "account_name": target.get("name"),
+        "ticker": ticker,
+        "target_date": target_date,
+        "close_price": close_price,
+        "close_source": close_source,
+        "close_updated_at": close_updated_at,
+        "suggested_buy_qty": suggested_buy_qty,
+        "suggested_sell_qty": suggested_sell_qty,
+        "suggested_memo": suggested_memo,
+        "is_api_filled": is_api_filled
+    }
 
 
 @router.post("/{acc_id}/close-settlement")

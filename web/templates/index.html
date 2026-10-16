@@ -754,34 +754,50 @@
   </div>
 
   <!-- 3. 당일 종가 & 체결 정산 모달 -->
-  <div class="modal-overlay" id="settlementModal" onclick="if(event.target===this) closeModal('settlementModal')">
-    <div class="modal-content">
+  <div class="modal-overlay" id="settlementModal" style="display:none;" onclick="if(event.target===this) closeModal('settlementModal')">
+    <div class="modal-content" style="max-width: 520px;">
       <div class="modal-header">
-        <h2>일일 마감 정산 (종가 & 체결 입력)</h2>
+        <div>
+          <h2 style="margin: 0; font-size: 1.15rem;">일일 마감 정산 (종가 & 체결 입력)</h2>
+          <p id="settle-acc-subtitle" style="margin: 3px 0 0 0; font-size: 0.8rem; color: var(--text-muted);"></p>
+        </div>
         <button class="btn-close" onclick="closeModal('settlementModal')">&times;</button>
       </div>
       <div class="modal-body">
         <input type="hidden" id="settle-acc-id">
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label>당일 마감 종가 (USD) *</label>
-          <input type="number" id="settle-close-price" class="form-input" step="0.01" placeholder="예: 45.60">
+
+        <!-- 자동 입력 안내 배너 -->
+        <div id="settle-auto-banner" style="display:none; padding: 0.65rem 0.85rem; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-sm); font-size: 0.78rem; color: var(--accent-cyan); line-height: 1.4; margin-bottom: 1rem;">
+          <span id="settle-auto-banner-text">💡 전역 종가 및 체결량이 자동 입력되었습니다. (수정 가능)</span>
         </div>
+
         <div class="form-group" style="margin-bottom:1rem;">
-          <label>실제 매수 체결 수량 (주)</label>
-          <input type="number" id="settle-buy-qty" class="form-input" value="0" min="0">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label style="margin: 0; font-weight: 600;">당일 마감 종가 (USD) *</label>
+            <span id="settle-close-badge" style="font-size: 0.72rem; color: var(--accent-cyan); background: rgba(56,189,248,0.1); padding: 1px 6px; border-radius: 4px;"></span>
+          </div>
+          <input type="number" id="settle-close-price" class="form-input" step="0.01" placeholder="예: 45.60" style="font-weight: 700; color: var(--accent-cyan);">
         </div>
-        <div class="form-group" style="margin-bottom:1rem;">
-          <label>실제 매도 체결 수량 (주)</label>
-          <input type="number" id="settle-sell-qty" class="form-input" value="0" min="0">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; margin-bottom: 1rem;">
+          <div class="form-group">
+            <label style="margin-bottom: 4px; display: block; font-weight: 600;">실제 매수 체결 (주)</label>
+            <input type="number" id="settle-buy-qty" class="form-input" value="0" min="0" style="font-weight: 700; color: #34d399;">
+          </div>
+          <div class="form-group">
+            <label style="margin-bottom: 4px; display: block; font-weight: 600;">실제 매도 체결 (주)</label>
+            <input type="number" id="settle-sell-qty" class="form-input" value="0" min="0" style="font-weight: 700; color: #f87171;">
+          </div>
         </div>
+
         <div class="form-group">
-          <label>정산 메모</label>
+          <label style="margin-bottom: 4px; display: block;">정산 메모 (선택사항)</label>
           <input type="text" id="settle-memo" class="form-input" placeholder="특이사항 메모">
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal('settlementModal')">취소</button>
-        <button class="btn btn-primary" onclick="submitSettlement()">정산 완료</button>
+        <button class="btn btn-primary" onclick="submitSettlement()" style="font-weight: 700;">정산 완료</button>
       </div>
     </div>
   </div>
@@ -1299,6 +1315,6 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Script -->
-  <script src="/static/js/app.js?v=2.6.2"></script>
+  <script src="/static/js/app.js?v=2.6.3"></script>
 </body>
 </html>

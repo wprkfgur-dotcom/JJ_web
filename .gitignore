@@ -42,6 +42,7 @@ env*/
 data/sessions.json
 data/users.json
 data/telegram_config.json
+data/global_price_cache.json
 
 # Operating System & IDE
 .DS_Store

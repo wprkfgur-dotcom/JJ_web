@@ -22,6 +22,7 @@ from core.telegram_notifier import (
     notify_order_generation,
     notify_rest_api_call
 )
+from core.market_cache import set_cached_close, get_cached_close
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -72,7 +73,12 @@ def save_scheduler_config(config: Dict[str, Any]):
 
 
 def fetch_latest_soxl_close() -> float:
-    """SOXL 최신 종가 조회 (yfinance -> DB fallback)"""
+    """SOXL 최신 종가 조회 (전역 캐시 -> yfinance -> DB fallback)"""
+    # 1. 시스템 전역 변수 우선 조회 (0.0001s)
+    cached = get_cached_close("SOXL")
+    if cached and cached.get("close_price"):
+        return float(cached["close_price"])
+
     try:
         import yfinance as yf
         t = yf.Ticker("SOXL")
@@ -80,7 +86,9 @@ def fetch_latest_soxl_close() -> float:
         if not hist.empty and "Close" in hist.columns:
             close_val = float(hist["Close"].dropna().iloc[-1])
             if close_val > 0:
-                return round(close_val, 2)
+                val = round(close_val, 2)
+                set_cached_close("SOXL", val, source="Yahoo Finance (스케줄러)")
+                return val
     except Exception as ex:
         print(f"[Scheduler] yfinance 종가 수집 예외: {ex}")
 
@@ -226,9 +234,11 @@ async def run_daily_settlement() -> Dict[str, Any]:
         print(f"[Scheduler] {msg}")
         return {"success": True, "message": msg, "count": 0, "results": []}
 
-    # 1. SOXL 마감 종가 수집
+    # 1. SOXL 마감 종가 수집 및 전역 캐시 등록
     close_price = fetch_latest_soxl_close()
-    print(f"[Scheduler] SOXL 마감 종가 확인: ${close_price:,.2f}")
+    today_str = get_kst_now().strftime("%Y-%m-%d")
+    set_cached_close("SOXL", close_price, date_str=today_str, source="메리츠/스케줄러 05:10 자동조회")
+    print(f"[Scheduler] SOXL 마감 종가 확인 및 전역 등록: ${close_price:,.2f}")
 
     results = []
     for acc in target_accounts:

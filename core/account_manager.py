@@ -16,6 +16,7 @@ from strategies.vr_v5 import ValueRebalancingV5Strategy
 from core.order_netting import calculate_order_netting, generate_jongjong_orders
 from core.market_calendar import get_next_trading_day, parse_date
 from core.strategy_registry import get_target_yield
+from core.market_cache import set_cached_close, get_cached_close
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -766,6 +767,14 @@ class AccountManager:
         acc['current_date'] = curr_d_str
         acc['operational_state'] = 'DAY_COMPLETED'  # 장 마감 정산 완료 상태
         self.save_accounts(accounts)
+
+        # 시스템 전역 종가 변수에 등록 (모든 사용자/계좌가 즉시 공유)
+        try:
+            acc_name = acc.get('name', '사용자')
+            set_cached_close(acc.get('ticker', 'SOXL'), close_p, date_str=curr_d_str, source=f"정산 입력 ({acc_name})")
+        except Exception as ex:
+            print(f"[AccountManager] 전역 종가 캐시 등록 안내: {ex}")
+
         return acc
 
     def delete_last_day_record(self, acc_id: str) -> bool:

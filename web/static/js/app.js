@@ -1858,11 +1858,67 @@ async function undoLastTradeRecord(accId) {
   }
 }
 
-function openSettlementModal(accId) {
+async function openSettlementModal(accId) {
   const modal = document.getElementById('settlementModal');
   if (!modal) return;
   document.getElementById('settle-acc-id').value = accId;
+
+  const closeInput = document.getElementById('settle-close-price');
+  const buyInput = document.getElementById('settle-buy-qty');
+  const sellInput = document.getElementById('settle-sell-qty');
+  const memoInput = document.getElementById('settle-memo');
+  const banner = document.getElementById('settle-auto-banner');
+  const bannerText = document.getElementById('settle-auto-banner-text');
+  const badge = document.getElementById('settle-close-badge');
+  const subtitle = document.getElementById('settle-acc-subtitle');
+
+  // 1. 입력 필드 기본 초기화
+  if (closeInput) closeInput.value = '';
+  if (buyInput) buyInput.value = '0';
+  if (sellInput) sellInput.value = '0';
+  if (memoInput) memoInput.value = '';
+  if (banner) banner.style.display = 'none';
+  if (badge) badge.textContent = '조회 중...';
+
+  const acc = (state.accounts || []).find(a => a.id === accId) || (state.activeAccountDetail ? state.activeAccountDetail.account : null);
+  if (subtitle && acc) {
+    subtitle.textContent = `계좌: ${acc.name} (${acc.ticker}) | 운용 기준일: ${acc.current_date || '당일'}`;
+  }
+
+  // 모달 즉시 열기
   openModal('settlementModal');
+
+  // 2. 시스템 전역 캐시 종가 및 예상 체결량 자동 채움 (백엔드 프리뷰 호출)
+  try {
+    const res = await authFetch(`/api/accounts/${accId}/settlement-preview`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        if (closeInput && data.close_price) {
+          closeInput.value = Number(data.close_price).toFixed(2);
+        }
+        if (buyInput) {
+          buyInput.value = data.suggested_buy_qty !== undefined ? data.suggested_buy_qty : 0;
+        }
+        if (sellInput) {
+          sellInput.value = data.suggested_sell_qty !== undefined ? data.suggested_sell_qty : 0;
+        }
+        if (memoInput && data.suggested_memo) {
+          memoInput.value = data.suggested_memo;
+        }
+        if (badge) {
+          badge.textContent = data.close_source ? `[${data.close_source}]` : '';
+        }
+        if (banner && bannerText) {
+          banner.style.display = 'block';
+          bannerText.innerHTML = `💡 <strong>자동 완성됨:</strong> ${data.close_source} 기준 종가($${data.close_price}) 및 수량이 미리 입력되었습니다. 필요 시 수정 후 [정산 완료]를 눌러주세요.`;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('정산 프리뷰 조회 오류:', e);
+    if (badge) badge.textContent = '';
+  }
 }
 
 async function submitSettlement() {
