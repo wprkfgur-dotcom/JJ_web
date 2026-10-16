@@ -153,10 +153,11 @@ def load_all_accounts(db_path: str) -> List[Dict[str, Any]]:
                     pass
 
             # 2. adjustments 로드
-            cur.execute("SELECT type, amount, date, reason FROM adjustments WHERE account_id = ? ORDER BY date ASC, id ASC", (acc_id,))
+            cur.execute("SELECT id, type, amount, date, reason FROM adjustments WHERE account_id = ? ORDER BY date ASC, id ASC", (acc_id,))
             adj_rows = cur.fetchall()
             adjustments = [
                 {
+                    "id": str(adj["id"]),
                     "type": adj["type"],
                     "amount": adj["amount"],
                     "date": adj["date"],
@@ -313,16 +314,30 @@ def save_all_accounts(accounts: List[Dict[str, Any]], db_path: str):
             # 2. Adjustments 교체
             cur.execute("DELETE FROM adjustments WHERE account_id = ?", (acc_id,))
             for adj in acc.get("adjustments", []):
-                cur.execute("""
-                INSERT INTO adjustments (account_id, type, amount, date, reason)
-                VALUES (?, ?, ?, ?, ?)
-                """, (
-                    acc_id,
-                    adj.get("type", "DEPOSIT"),
-                    float(adj.get("amount", 0.0)),
-                    adj.get("date", ""),
-                    adj.get("reason", "")
-                ))
+                raw_id = adj.get("id")
+                if raw_id is not None and str(raw_id).isdigit():
+                    cur.execute("""
+                    INSERT INTO adjustments (id, account_id, type, amount, date, reason)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, (
+                        int(raw_id),
+                        acc_id,
+                        adj.get("type", "DEPOSIT"),
+                        float(adj.get("amount", 0.0)),
+                        adj.get("date", ""),
+                        adj.get("reason", "")
+                    ))
+                else:
+                    cur.execute("""
+                    INSERT INTO adjustments (account_id, type, amount, date, reason)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, (
+                        acc_id,
+                        adj.get("type", "DEPOSIT"),
+                        float(adj.get("amount", 0.0)),
+                        adj.get("date", ""),
+                        adj.get("reason", "")
+                    ))
 
             # 3. Trade Records 교체
             cur.execute("DELETE FROM trade_records WHERE account_id = ?", (acc_id,))

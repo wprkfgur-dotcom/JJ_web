@@ -492,6 +492,17 @@ async def add_account_adjustment(acc_id: str, req: AdjustmentRequest, request: R
     return {"success": True}
 
 
+@router.delete("/{acc_id}/adjustment/{adj_id}")
+async def delete_account_adjustment(acc_id: str, adj_id: str, request: Request):
+    """계좌 입출금 기록 삭제 (소유자 검증 및 잔액/주문표 즉시 재계산)"""
+    get_owned_account(acc_id, request, "본인의 계좌만 입출금 기록을 삭제할 수 있습니다.")
+
+    ok = am.delete_adjustment(acc_id=acc_id, adj_id=adj_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="입출금 내역을 찾을 수 없거나 삭제에 실패했습니다.")
+    return {"success": True}
+
+
 @router.post("/{acc_id}/undo")
 async def undo_last_trade(acc_id: str, request: Request):
     """마지막 거래일 기록 취소 (소유자 검증)"""

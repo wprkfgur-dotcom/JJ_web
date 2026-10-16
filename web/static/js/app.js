@@ -1303,7 +1303,10 @@ function renderDetailSubTabs(data) {
   const adjPane = document.getElementById('subtab-adjustments');
   if (adjPane) {
     adjPane.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:0.75rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
+        <div style="font-size:0.825rem;color:var(--text-secondary);">
+          💡 입금/출금(세금 등) 시 계좌 잔액 및 당일 매수/매도 주문표가 자동으로 즉시 재계산됩니다.
+        </div>
         <button class="btn btn-primary btn-sm" onclick="openAdjustmentModal('${acc.id}')">+ 입출금 기록 추가</button>
       </div>
       ${adjustments.length > 0 ? `
@@ -1314,6 +1317,7 @@ function renderDetailSubTabs(data) {
               <th>구분</th>
               <th>금액</th>
               <th>사유</th>
+              <th style="text-align:center;width:80px;">관리</th>
             </tr>
           </thead>
           <tbody>
@@ -1321,8 +1325,13 @@ function renderDetailSubTabs(data) {
               <tr>
                 <td>${a.date}</td>
                 <td><span class="badge ${a.type === 'DEPOSIT' ? 'badge-mode-normal' : 'badge-mode-riskoff'}">${a.type === 'DEPOSIT' ? '입금' : '출금 (세금 등)'}</span></td>
-                <td><strong>${fmt.usd(a.amount)}</strong></td>
+                <td><strong style="color: ${a.type === 'DEPOSIT' ? 'var(--profit-green)' : 'var(--loss-red)'};">${a.type === 'DEPOSIT' ? '+' : '-'}${fmt.usd(a.amount)}</strong></td>
                 <td>${a.reason || '-'}</td>
+                <td style="text-align:center;">
+                  <button type="button" class="btn btn-secondary btn-xs" onclick="deleteAdjustment('${acc.id}', '${a.id}', '${a.date}', '${a.type}', ${a.amount})" title="기록 삭제" style="color:#f87171;border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.1);padding:3px 8px;border-radius:4px;font-size:0.75rem;cursor:pointer;">
+                    🗑️ 삭제
+                  </button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
@@ -2067,13 +2076,37 @@ async function submitAdjustment() {
     });
     const data = await res.json();
     if (data.success) {
-      showToast('입출금 내역이 저장되었습니다.');
+      showToast('입출금 내역이 저장되었으며, 잔액 및 매수/매도표가 갱신되었습니다.');
       closeModal('adjustmentModal');
-      await openAccountDetailModal(accId);
+      await openAccountDetailModal(accId, false);
       loadAccounts(true);
     }
   } catch (e) {
     showToast('입출금 처리 실패', 'error');
+  }
+}
+
+async function deleteAdjustment(accId, adjId, dateStr, type, amount) {
+  const typeLabel = type === 'DEPOSIT' ? '입금' : '출금';
+  const amountStr = Number(amount).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  const msg = `${dateStr} [${typeLabel} ${amountStr}] 기록을 삭제하시겠습니까?\n\n⚠️ 삭제 시 계좌 잔액 및 당일 매수/매도 주문표가 자동으로 재계산됩니다.`;
+  if (!confirm(msg)) return;
+
+  try {
+    const res = await authFetch(`/api/accounts/${accId}/adjustment/${adjId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('입출금 내역이 삭제되었으며, 잔액 및 매수/매도표가 갱신되었습니다.');
+      await openAccountDetailModal(accId, false);
+      loadAccounts(true);
+    } else {
+      showToast(data.detail || '삭제 실패', 'error');
+    }
+  } catch (e) {
+    console.error('입출금 삭제 오류:', e);
+    showToast('입출금 삭제 중 오류가 발생했습니다.', 'error');
   }
 }
 

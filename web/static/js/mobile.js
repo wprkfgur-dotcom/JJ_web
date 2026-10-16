@@ -596,21 +596,51 @@ function renderMobileRecords(container, data) {
 
 function renderMobileAdjustments(container, data) {
   const adjs = data.adjustments || [];
+  const accId = (data.account && data.account.id) || mState.currentAccountId;
   if (adjs.length === 0) {
     container.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--m-text-muted);">입출금 내역이 없습니다.</div>`;
     return;
   }
-  container.innerHTML = adjs.map(a => `
-    <div style="background:rgba(15,23,42,0.6);border:1px solid var(--m-border-subtle);border-radius:8px;padding:0.7rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
-      <div>
-        <div style="font-weight:700;color:#fff;font-size:0.8rem;">${a.type === 'DEPOSIT' ? '💵 입금' : '💸 출금'}</div>
-        <div style="font-size:0.725rem;color:var(--m-text-muted);">${a.date} · ${a.reason || ''}</div>
-      </div>
-      <div style="font-weight:800;font-size:0.95rem;color:${a.type === 'DEPOSIT' ? 'var(--m-profit-green)' : 'var(--m-loss-red)'};">
-        ${a.type === 'DEPOSIT' ? '+' : '-'}${mFmt.usd(a.amount)}
-      </div>
+  container.innerHTML = `
+    <div style="font-size:0.75rem;color:var(--m-text-muted);margin-bottom:0.6rem;padding:0 4px;">
+      💡 입출금 기록 시 계좌 잔액 및 매수/매도 주문표가 자동 갱신됩니다.
     </div>
-  `).join('');
+    ${adjs.map(a => `
+      <div style="background:rgba(15,23,42,0.6);border:1px solid var(--m-border-subtle);border-radius:8px;padding:0.7rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:700;color:#fff;font-size:0.8rem;">${a.type === 'DEPOSIT' ? '💵 입금' : '💸 출금'}</div>
+          <div style="font-size:0.725rem;color:var(--m-text-muted);">${a.date} · ${a.reason || '-'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+          <div style="font-weight:800;font-size:0.95rem;color:${a.type === 'DEPOSIT' ? 'var(--m-profit-green)' : 'var(--m-loss-red)'};">
+            ${a.type === 'DEPOSIT' ? '+' : '-'}${mFmt.usd(a.amount)}
+          </div>
+          <button type="button" onclick="mDeleteAdjustment('${accId}', '${a.id}', '${a.date}', '${a.type}', ${a.amount})" title="삭제" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;border-radius:4px;padding:3px 6px;font-size:0.75rem;cursor:pointer;">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+async function mDeleteAdjustment(accId, adjId, dateStr, type, amount) {
+  const typeLabel = type === 'DEPOSIT' ? '입금' : '출금';
+  const amountStr = mFmt.usd(amount);
+  if (!confirm(`${dateStr} [${typeLabel} ${amountStr}] 기록을 삭제하시겠습니까?\n\n삭제 시 잔액 및 당일 매수/매도 주문표가 자동으로 재계산됩니다.`)) return;
+
+  try {
+    const res = await mApi(`/api/accounts/${accId}/adjustment/${adjId}`, { method: 'DELETE' });
+    if (res && res.success) {
+      mToast('입출금 기록이 삭제되었으며 주문표가 갱신되었습니다.');
+      await openAccountDetail(accId);
+      loadDashboard();
+    } else {
+      mToast((res && res.detail) || '삭제 실패', true);
+    }
+  } catch (e) {
+    mToast('입출금 삭제 실패: ' + e.message, true);
+  }
 }
 
 // =====================================================================

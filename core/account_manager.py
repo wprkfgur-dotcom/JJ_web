@@ -543,7 +543,8 @@ class AccountManager:
 
     def add_adjustment(self, acc_id: str, adj_type: str, amount: float, date_str: str, reason: str = "") -> bool:
         """
-        계좌에 현금 입금(DEPOSIT) 또는 출금(WITHDRAW, 예: 세금 납부)을 기록합니다.
+        계좌에 현금 입금(DEPOSIT) 또는 출금(WITHDRAW, 예: 세금 납부)을 기록하고,
+        예수금/총자산/실투자원금(AR) 및 당일 매수/매도 주문표를 즉시 재계산하여 업데이트합니다.
         """
         accounts = self.load_accounts()
         target = None
@@ -565,6 +566,44 @@ class AccountManager:
         }
         target.setdefault('adjustments', []).append(adj_entry)
         self.sync_account_balances(target)
+
+        # 잔액/AR 변경에 따른 당일 매수/매도 주문표 즉시 재계산 및 갱신
+        details = self.compute_account_details(target)
+        target['order_table'] = details.get('orders', {})
+
+        self.save_accounts(accounts)
+        return True
+
+    def delete_adjustment(self, acc_id: str, adj_id: str) -> bool:
+        """
+        계좌의 특정 입출금 내역을 삭제하고,
+        예수금/총자산/실투자원금(AR) 롤백 및 당일 매수/매도 주문표를 즉시 재계산하여 업데이트합니다.
+        """
+        accounts = self.load_accounts()
+        target = next((a for a in accounts if a['id'] == acc_id), None)
+        if not target:
+            return False
+
+        adjs = target.get('adjustments', [])
+        found_idx = None
+        for i, a in enumerate(adjs):
+            if str(a.get('id', '')) == str(adj_id):
+                found_idx = i
+                break
+
+        if found_idx is None:
+            return False
+
+        removed = adjs.pop(found_idx)
+        print(f"[AccountManager] 입출금 기록 삭제: 계좌={target.get('name')}, type={removed.get('type')}, amount={removed.get('amount')}, date={removed.get('date')}")
+
+        # 잔액 및 자산 롤백 동기화
+        self.sync_account_balances(target)
+
+        # 잔액/AR 변경에 따른 당일 매수/매도 주문표 즉시 재계산 및 갱신
+        details = self.compute_account_details(target)
+        target['order_table'] = details.get('orders', {})
+
         self.save_accounts(accounts)
         return True
 
