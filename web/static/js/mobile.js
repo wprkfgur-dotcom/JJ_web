@@ -692,6 +692,29 @@ async function mUndoLastTrade() {
   }
 }
 
+async function mDeleteAccount() {
+  const accId = mState.currentAccountId;
+  const accName = mState.currentAccountData?.account?.name || '현재 계좌';
+  if (!accId) return;
+
+  const msg = `정말로 '${accName}' 계좌를 영구 삭제하시겠습니까?\n\n⚠️ 경고:\n- 계좌에 등록된 모든 매매일지와 입출금 기록이 영구히 삭제됩니다.\n- 자동매매 API 연동 정보도 함께 삭제됩니다.\n- 삭제된 데이터는 복구할 수 없습니다.`;
+  if (!confirm(msg)) return;
+
+  try {
+    const res = await mApi(`/api/accounts/${accId}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      mToast('계좌가 영구 삭제되었습니다.');
+      mSwitchNav('accounts');
+      await loadAccounts();
+    } else {
+      mToast(data.detail || '계좌 삭제 실패', true);
+    }
+  } catch (e) {
+    mToast('계좌 삭제 중 오류가 발생했습니다.', true);
+  }
+}
+
 function mCloseModal(id) {
   const el = document.getElementById(id);
   if (el) {

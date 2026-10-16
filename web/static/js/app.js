@@ -1264,7 +1264,7 @@ function renderDetailSubTabs(data) {
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-subtle); padding-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
           <div>
             <h3 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-              <span>⚙️</span> 계좌별 맞춤 전략 운용 변수 설정
+              <span>⚙️</span> 계좌 설정 (전략 운용 변수)
             </h3>
             <p style="margin: 4px 0 0 0; font-size: 0.82rem; color: var(--text-muted);">
               각 시장 모드(Normal / Safe / Riskoff)별 목표 익절률 및 분할수, 보유일수, 위기준비율을 자유롭게 맞춤 설정합니다.
@@ -1430,7 +1430,22 @@ function renderDetailSubTabs(data) {
             설정 저장 시 즉시 해당 계좌의 당일 LOC 주문표 및 매수/매도 수량이 자동 재계산됩니다.
           </div>
           <button type="button" class="btn btn-primary" onclick="saveAccountStrategyParams('${acc.id}')" style="padding: 0.75rem 1.75rem; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);">
-            <span>💾</span> 전략 운용 설정 저장
+            <span>💾</span> 계좌 설정 저장
+          </button>
+        </div>
+
+        <!-- 4. 위험 영역: 계좌 삭제 (Danger Zone) -->
+        <div style="margin-top: 1.5rem; padding: 1.1rem 1.25rem; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <div style="font-weight: 700; color: #f87171; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+              <span>⚠️</span> 계좌 삭제 (Danger Zone)
+            </div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 3px;">
+              이 계좌와 모든 매매일지, 입출금 이력을 영구적으로 삭제합니다. 삭제 후에는 복구할 수 없습니다.
+            </div>
+          </div>
+          <button type="button" class="btn" onclick="openDeleteAccountModal('${acc.id}', '${acc.name.replace(/'/g, "\\'")}')" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-weight: 700; padding: 0.6rem 1.35rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.4rem;">
+            <span>🗑️</span> 계좌 삭제하기
           </button>
         </div>
       </div>
@@ -1544,6 +1559,56 @@ async function submitRenameAccount() {
   }
 }
 window.submitRenameAccount = submitRenameAccount;
+
+// -------------------------------------------------------------------
+// 계좌 삭제 전용 모달 및 실행 액션
+// -------------------------------------------------------------------
+function openDeleteAccountModal(accId, curName) {
+  const modal = document.getElementById('deleteAccountModal');
+  if (!modal) return;
+  const idInput = document.getElementById('delete-acc-id');
+  const nameEl = document.getElementById('delete-acc-name-text');
+  if (idInput) idInput.value = accId;
+  if (nameEl) nameEl.textContent = `[${curName || '선택한 계좌'}]`;
+  modal.classList.add('active');
+  modal.style.display = 'flex';
+}
+window.openDeleteAccountModal = openDeleteAccountModal;
+
+async function executeDeleteAccount() {
+  const accId = document.getElementById('delete-acc-id')?.value;
+  if (!accId) return;
+
+  const btn = document.getElementById('btn-confirm-delete-acc');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '삭제 처리 중...';
+  }
+
+  try {
+    const res = await authFetch(`/api/accounts/${accId}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      showToast('계좌가 영구 삭제되었습니다.', 'success');
+      closeModal('deleteAccountModal');
+      closeAccountDetailView();
+      loadAccounts();
+    } else {
+      showToast(data.detail || '계좌 삭제에 실패했습니다.', 'error');
+    }
+  } catch (err) {
+    console.error('계좌 삭제 오류:', err);
+    showToast('계좌 삭제 처리 중 오류가 발생했습니다.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '영구 삭제하기';
+    }
+  }
+}
+window.executeDeleteAccount = executeDeleteAccount;
 
 // -------------------------------------------------------------------
 // 계좌 관련 제어 액션들
