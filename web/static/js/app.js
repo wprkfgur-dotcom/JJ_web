@@ -762,6 +762,104 @@ async function openAccountDetailModal(accId, pushHistory = true) {
       `;
     }
 
+    // 상단 계좌 핵심 메트릭 요약 바 렌더링 (카드 요약 정보 상세 상단 노출)
+    const metricsBar = document.getElementById('account-detail-metrics-bar');
+    if (metricsBar) {
+      const det = data.details || data.summary || {};
+      const totalAsset = Number(det.current_asset ?? acc.total_asset ?? 0);
+      const cash = Number(det.current_cash ?? acc.current_cash ?? 0);
+      const holdings = Number(det.current_hold ?? acc.current_holdings ?? 0);
+      const price = Number(det.current_price ?? acc.current_price ?? 0);
+      const seed = Number(acc.initial_seed ?? 0);
+      const profit = Number(det.total_profit ?? acc.total_profit ?? 0);
+      const returnPct = Number(det.total_return_pct ?? acc.return_pct ?? 0);
+      const isProfit = profit >= 0;
+      const stockVal = holdings * price;
+      const cashPct = totalAsset > 0 ? ((cash / totalAsset) * 100).toFixed(1) : '0.0';
+      const si = data.season_info || det.season_info || acc.season_info;
+
+      metricsBar.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.85rem; margin-top: 1rem; margin-bottom: 1.25rem;">
+          <!-- 1. 총 평가자산 -->
+          <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 1rem 1.15rem; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+              <span>총 평가자산</span>
+              <span>💰</span>
+            </div>
+            <div style="font-size: 1.45rem; font-weight: 800; color: #fff; margin: 0.35rem 0 0.15rem 0;">
+              ${fmt.usd(totalAsset)}
+            </div>
+            <div style="font-size: 0.8rem; font-weight: 700; color: ${isProfit ? 'var(--profit-green)' : 'var(--loss-red)'};">
+              ${isProfit ? '▲' : '▼'} ${fmt.usd(profit)} (${fmt.pct(returnPct)})
+            </div>
+          </div>
+
+          <!-- 2. 보유 현금 -->
+          <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 1rem 1.15rem; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+              <span>보유 현금</span>
+              <span>💵</span>
+            </div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: var(--accent-cyan); margin: 0.35rem 0 0.15rem 0;">
+              ${fmt.usd(cash)}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">
+              현금 비중: <strong style="color: #e2e8f0;">${cashPct}%</strong>
+            </div>
+          </div>
+
+          <!-- 3. 보유 주식수 (현재가) -->
+          <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 1rem 1.15rem; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+              <span>보유 주식수</span>
+              <span>📈</span>
+            </div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #fff; margin: 0.35rem 0 0.15rem 0;">
+              ${fmt.num(holdings)}주
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">
+              현재가: <strong style="color: #e2e8f0;">${fmt.usd(price)}</strong> (평가: ${fmt.usd(stockVal)})
+            </div>
+          </div>
+
+          <!-- 4. 초기 투자원금 -->
+          <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: var(--radius-sm); padding: 1rem 1.15rem; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+              <span>초기 투자원금</span>
+              <span>🌱</span>
+            </div>
+            <div style="font-size: 1.35rem; font-weight: 800; color: #e2e8f0; margin: 0.35rem 0 0.15rem 0;">
+              ${fmt.usd(seed)}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary);">
+              순자산 증감: <strong style="color: ${isProfit ? 'var(--profit-green)' : 'var(--loss-red)'};">${isProfit ? '+' : ''}${fmt.usd(profit)}</strong>
+            </div>
+          </div>
+
+          <!-- 5. 1회 매수금 및 시즌 배정 요약 카드 -->
+          ${si ? `
+          <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: var(--radius-sm); padding: 0.85rem 1.15rem; display: flex; flex-direction: column; justify-content: space-between; grid-column: 1 / -1;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; margin-bottom: 6px; flex-wrap: wrap; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700;">🗓️ 제${si.season_number}시즌 (${si.season_day}/10일차)</span>
+                <span style="color: var(--text-secondary); font-size: 0.78rem;">시즌 실원금(AR): <strong style="color: #fff;">${fmt.usd(si.season_ar)}</strong> (비상금 AK: ${fmt.usd(si.season_ak)})</span>
+              </div>
+              <div style="color: var(--accent-cyan); font-weight: 700; font-size: 0.85rem;">
+                당일 1회 배정: ${fmt.usd(si.daily_p_budget)}
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.775rem; flex-wrap: wrap; gap: 8px;">
+              <span style="${si.current_mode === 'Normal' ? 'color:#38bdf8;font-weight:700;' : 'color:var(--text-secondary);'}">Normal(8): ${fmt.usd(si.normal_p)}</span>
+              <span style="${si.current_mode === 'Safe' ? 'color:#fbbf24;font-weight:700;' : 'color:var(--text-secondary);'}">Safe(7): ${fmt.usd(si.safe_p)}</span>
+              <span style="${si.current_mode === 'Riskoff' ? 'color:#f87171;font-weight:700;' : 'color:var(--text-secondary);'}">Risk-off(5): ${fmt.usd(si.riskoff_p)}</span>
+              <span style="color: #34d399; font-weight: 600;">시즌 잔여: ${fmt.usd(si.season_remaining_budget)}</span>
+            </div>
+          </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
     // 서브 탭 렌더링 및 첫 서브탭 활성화
     renderDetailSubTabs(data);
     switchDetailSubTab(state.activeDetailSubTab || 'orders');
