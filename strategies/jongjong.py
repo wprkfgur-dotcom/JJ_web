@@ -253,9 +253,25 @@ class JongJongStrategy(BaseStrategy):
             else:
                 merged_ak = 0.0
 
-            # [Step C] 당일 매수예정금(P) 산출
+            # [Step C] 당일 매수예정금(P) 산출 (10일 시즌 주기 예산 소진 규칙 적용)
             div = self.div_rounds[mode]
-            p_budget = ar_val / div if t == 0 else min(ar_val / div, curr_cash_before_trade)
+            current_mode_p = ar_val / div
+
+            # 이번 10일 시즌 내 기집행 누적 배정 예산 추적
+            cycle_len = self.reinvest_cycle if self.reinvest_cycle > 0 else 10
+            season_start_idx = (t // cycle_len) * cycle_len
+            season_used_budget = 0.0
+            for k in range(season_start_idx, t):
+                if records[k]['R'] > 0:
+                    k_mode = records[k]['Mode']
+                    k_div = self.div_rounds.get(k_mode, 8.0)
+                    season_used_budget += (ar_val / k_div)
+
+            season_remaining_budget = max(0.0, ar_val - season_used_budget)
+
+            # Normal로 7일 보낸 후 Safe 전환 시 남은 Normal 1회분만 매수, 잔여 예산 소진 시 9~10일차 매수 불가(0원 관망)
+            daily_budget = min(current_mode_p, season_remaining_budget)
+            p_budget = max(0.0, min(daily_budget, curr_cash_before_trade))
 
             # [Step D] 일일 LOC 예약 주문표 산출
             unsold = [rec for rec in records if rec['R'] > 0 and not rec['Sold']]
@@ -273,7 +289,7 @@ class JongJongStrategy(BaseStrategy):
             AU3, AV3 = None, 0
             if len(loc_lots) > 0:
                 min_u = min(rec['U'] for rec in loc_lots)
-                if is_normal and BB3 >= min_u:
+                if (is_normal and BB3 >= min_u) or (mode == 'Safe' and min_u <= safe_round4(AU2 * 1.01)):
                     AU3 = min_u
                     for rec in loc_lots:
                         if rec['U'] == min_u:
@@ -281,7 +297,7 @@ class JongJongStrategy(BaseStrategy):
                             break
 
             a_val = C2 if is_normal else (O4 if is_riskoff else 0.0)
-            if is_normal and AU3 is not None and AU3 <= AU2 * (1.0 + a_val):
+            if AU3 is not None and AU3 <= AU2 * (1.0 + a_val + 0.01):
                 AY2 = safe_round4(AU3 - 0.01)
             else:
                 AY2 = safe_round4(AU2 * (1.0 + a_val) - 0.01)
