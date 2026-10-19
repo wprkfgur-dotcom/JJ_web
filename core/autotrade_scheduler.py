@@ -23,6 +23,7 @@ from core.telegram_notifier import (
     notify_rest_api_call
 )
 from core.market_cache import set_cached_close, get_cached_close
+from core.market_calendar import is_us_trading_day
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -72,36 +73,59 @@ def save_scheduler_config(config: Dict[str, Any]):
     os.replace(tmp_file, CONFIG_FILE)
 
 
-def fetch_latest_soxl_close() -> float:
+def fetch_latest_soxl_close(target_date: str = None) -> float:
     """SOXL 최신 종가 조회 (전역 캐시 -> yfinance -> DB fallback)"""
-    # 1. 시스템 전역 변수 우선 조회 (0.0001s)
-    cached = get_cached_close("SOXL")
-    if cached and cached.get("close_price"):
-        return float(cached["close_price"])
+    # 1. target_date가 지정된 경우 해당 날짜 전역 캐시 확인
+    if target_date:
+        cached = get_cached_close("SOXL", target_date)
+        if cached and cached.get("close_price"):
+            return float(cached["close_price"])
+    else:
+        cached = get_cached_close("SOXL")
+        if cached and cached.get("close_price"):
+            return float(cached["close_price"])
 
+    # 2. yfinance 종가 수집
     try:
         import yfinance as yf
         t = yf.Ticker("SOXL")
         hist = t.history(period="5d")
         if not hist.empty and "Close" in hist.columns:
+            if target_date:
+                matched = hist[hist.index.strftime('%Y-%m-%d') == target_date]
+                if not matched.empty:
+                    val = round(float(matched["Close"].dropna().iloc[-1]), 2)
+                    set_cached_close("SOXL", val, date_str=target_date, source="Yahoo Finance (스케줄러)")
+                    return val
+            # target_date가 없거나 매칭되지 않은 경우 가장 최신 마감봉
+            last_date_str = hist.index[-1].strftime('%Y-%m-%d')
             close_val = float(hist["Close"].dropna().iloc[-1])
             if close_val > 0:
                 val = round(close_val, 2)
-                set_cached_close("SOXL", val, source="Yahoo Finance (스케줄러)")
+                set_cached_close("SOXL", val, date_str=last_date_str, source="Yahoo Finance (스케줄러)")
                 return val
     except Exception as ex:
         print(f"[Scheduler] yfinance 종가 수집 예외: {ex}")
 
+    # 3. 로컬 시세 DB 확인
     try:
-        from core.data import get_price_from_db
-        today_str = get_kst_now().strftime("%Y-%m-%d")
-        p = get_price_from_db("SOXL", today_str)
+        from core.data import get_exact_price_from_db, get_price_from_db
+        if target_date:
+            p_exact = get_exact_price_from_db("SOXL", target_date)
+            if p_exact is not None and p_exact > 0:
+                val = round(p_exact, 2)
+                set_cached_close("SOXL", val, date_str=target_date, source="DB")
+                return val
+        check_date = target_date or get_kst_now().strftime("%Y-%m-%d")
+        p = get_price_from_db("SOXL", check_date)
         if p > 0:
-            return round(p, 2)
+            val = round(p, 2)
+            set_cached_close("SOXL", val, date_str=check_date, source="DB")
+            return val
     except Exception:
         pass
 
-    return 127.57  # 안전 기본값
+    return 93.67  # 최신 안전 기본값
 
 
 async def run_daily_orders(dry_run: bool = False) -> Dict[str, Any]:
@@ -234,11 +258,11 @@ async def run_daily_settlement() -> Dict[str, Any]:
         print(f"[Scheduler] {msg}")
         return {"success": True, "message": msg, "count": 0, "results": []}
 
-    # 1. SOXL 마감 종가 수집 및 전역 캐시 등록
-    close_price = fetch_latest_soxl_close()
-    today_str = get_kst_now().strftime("%Y-%m-%d")
-    set_cached_close("SOXL", close_price, date_str=today_str, source="메리츠/스케줄러 05:10 자동조회")
-    print(f"[Scheduler] SOXL 마감 종가 확인 및 전역 등록: ${close_price:,.2f}")
+    # 1. SOXL 마감 종가 수집 및 전역 캐시 등록 (대상 미국 장마감일 기준)
+    target_us_date = (now_kst.date() - timedelta(days=1)).strftime("%Y-%m-%d")
+    close_price = fetch_latest_soxl_close(target_date=target_us_date)
+    set_cached_close("SOXL", close_price, date_str=target_us_date, source="메리츠/스케줄러 05:10 자동조회")
+    print(f"[Scheduler] SOXL 마감 종가 확인 및 전역 등록: ${close_price:,.2f} (기준일: {target_us_date})")
 
     results = []
     for acc in target_accounts:
@@ -396,19 +420,28 @@ async def scheduler_background_loop():
                 order_target = cfg.get("order_time", "21:00").strip()
                 settle_target = cfg.get("settle_time", "05:30").strip()
 
-                # 1. 주문 실행 시간 체크
+                # 1. 주문 실행 시간 체크 (한국시간 20:20 또는 21:00)
                 if current_hm == order_target and cfg.get("last_order_date") != today_str:
                     cfg["last_order_date"] = today_str
                     save_scheduler_config(cfg)
-                    print(f"[Scheduler] 🎯 주문 예약 시각 도달 ({order_target}) -> 주문 실행")
-                    await run_daily_orders(dry_run=False)
+                    # 오늘이 미국 증시 개장일인지 확인 (주말 및 공휴일 스킵)
+                    if not is_us_trading_day(now_kst.date()):
+                        print(f"[Scheduler] 오늘({today_str})은 미국 증시 휴장일(주말/공휴일)이므로 LOC 주문 전송을 건너뜁니다.")
+                    else:
+                        print(f"[Scheduler] 🎯 주문 예약 시각 도달 ({order_target}) -> 주문 실행")
+                        await run_daily_orders(dry_run=False)
 
                 # 2. 아침 정산 시간 체크 (기본 한국시간 05:30)
                 if current_hm == settle_target and cfg.get("last_settle_date") != today_str:
                     cfg["last_settle_date"] = today_str
                     save_scheduler_config(cfg)
-                    print(f"[Scheduler] 🎯 결산 예약 시각 도달 ({settle_target}) -> 결산 및 익일 진행")
-                    await run_daily_settlement()
+                    # 어제(직전 미국 세션)가 미국 증시 개장일이었는지 확인 (토/일 밤에는 장이 열리지 않음)
+                    target_us_date = now_kst.date() - timedelta(days=1)
+                    if not is_us_trading_day(target_us_date):
+                        print(f"[Scheduler] 직전 거래일({target_us_date.strftime('%Y-%m-%d')})은 미국 증시 개장일이 아니었으므로 아침 결산을 건너뜁니다.")
+                    else:
+                        print(f"[Scheduler] 🎯 결산 예약 시각 도달 ({settle_target}) -> 결산 및 익일 진행")
+                        await run_daily_settlement()
 
         except Exception as e:
             print(f"[Scheduler Loop Error] {e}")

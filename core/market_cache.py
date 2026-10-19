@@ -75,8 +75,12 @@ def set_cached_close(ticker: str, close_price: float, date_str: str = None, sour
         "updated_at": now_kst
     }
 
-    _GLOBAL_PRICE_CACHE[ticker_clean] = entry
-    # 날짜별 복합 키도 함께 보존 (ticker_date)
+    # 대표 키는 date_str이 기존 대표 키의 날짜보다 최신이거나 같을 때만 갱신 (과거 데이터 입력 시 최신값 보호)
+    existing_rep = _GLOBAL_PRICE_CACHE.get(ticker_clean)
+    if not existing_rep or str(existing_rep.get("date", "")) <= date_str:
+        _GLOBAL_PRICE_CACHE[ticker_clean] = entry
+
+    # 날짜별 복합 키는 항상 보존 (ticker_date)
     _GLOBAL_PRICE_CACHE[f"{ticker_clean}_{date_str}"] = entry
 
     save_price_cache()
