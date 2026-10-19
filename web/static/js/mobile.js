@@ -528,8 +528,9 @@ function renderMobileRecords(container, data) {
 
             let chgHtml = '<span style="color:#64748b;">-</span>';
             if (r.chgVal !== null && !isNaN(r.chgVal) && Math.abs(r.chgVal) > 0.00001) {
-              const pctStr = (r.chgVal * 100).toFixed(2);
-              chgHtml = r.chgVal > 0 
+              const numVal = Math.abs(r.chgVal) > 1.0 ? r.chgVal : (r.chgVal * 100);
+              const pctStr = numVal.toFixed(2);
+              chgHtml = numVal > 0 
                 ? `<span style="color:#f87171;font-weight:700;">+${pctStr}%</span>` 
                 : `<span style="color:#60a5fa;font-weight:700;">${pctStr}%</span>`;
             }

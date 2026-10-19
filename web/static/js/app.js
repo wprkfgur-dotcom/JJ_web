@@ -1228,11 +1228,12 @@ function renderDetailSubTabs(data) {
                 const dateFmt = formatTradeDate(r.Date);
                 const closeFmt = fmt.usd(r.Close);
 
-                // 변동률
+                // 변동률 (절댓값 1.0 이상이면 이미 % 단위, 1.0 미만이면 비율이므로 * 100)
                 let chgHtml = '<span style="color:#64748b;">-</span>';
                 if (r.chgVal !== null && !isNaN(r.chgVal) && Math.abs(r.chgVal) > 0.00001) {
-                  const pctStr = (r.chgVal * 100).toFixed(2);
-                  if (r.chgVal > 0) {
+                  const numVal = Math.abs(r.chgVal) > 1.0 ? r.chgVal : (r.chgVal * 100);
+                  const pctStr = numVal.toFixed(2);
+                  if (numVal > 0) {
                     chgHtml = `<span style="color:#f87171;font-weight:700;">+${pctStr}%</span>`;
                   } else {
                     chgHtml = `<span style="color:#60a5fa;font-weight:700;">${pctStr}%</span>`;
