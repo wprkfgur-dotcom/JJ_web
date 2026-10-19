@@ -627,6 +627,12 @@ class AccountManager:
         next_d_str = next_d.strftime('%Y-%m-%d')
 
         acc['current_date'] = next_d_str
+        if records:
+            last_r = records[-1]
+            acc['current_cash'] = float(last_r.get('Cash', acc.get('current_cash', 0.0)))
+            acc['current_holdings'] = int(last_r.get('Hold', acc.get('current_holdings', 0)))
+            acc['current_price'] = float(last_r.get('Close', acc.get('current_price', 0.0)))
+            acc['total_asset'] = float(last_r.get('Asset', acc.get('total_asset', 0.0)))
         acc['operational_state'] = 'WAITING_FOR_FILL'  # 미국 장전 - LOC 주문 대기 상태
         self.save_accounts(accounts)
         return acc
@@ -814,6 +820,10 @@ class AccountManager:
             records.append(new_entry)
 
         acc['current_date'] = curr_d_str
+        acc['current_cash'] = new_cash
+        acc['current_holdings'] = new_hold
+        acc['total_asset'] = new_asset
+        acc['current_price'] = close_p
         acc['operational_state'] = 'DAY_COMPLETED'  # 장 마감 정산 완료 상태
         self.save_accounts(accounts)
 
