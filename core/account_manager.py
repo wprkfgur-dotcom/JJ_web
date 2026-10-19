@@ -1180,7 +1180,10 @@ class AccountManager:
 
             # 당일 매수 예정금 (budget):
             # Normal로 7일 보낸 후 Safe 전환 시 남은 1회분만 매수, 잔여 예산 소진 시 9~10일차 매수 불가(0원)
+            # 또한 실제 계좌 예수금(final_cash)이 부족할 경우 보유 현금 한도 내로 매수 예산 제한
             budget = min(current_mode_p, season_remaining_budget)
+            if final_cash > 0:
+                budget = min(budget, final_cash)
             budget = max(0.0, round(budget, 2))
 
             season_info = {
