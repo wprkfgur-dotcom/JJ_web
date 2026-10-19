@@ -1154,8 +1154,15 @@ class AccountManager:
 
             target_yield = strat.target_yields.get(mode, 0.0275)
             reserve_ratio = float(acc.get('reserve_ratio', 0.05))
-            ar_val = round(effective_capital * (1.0 - reserve_ratio), 2)
-            ak_val = round(effective_capital * reserve_ratio, 2)
+            if params.get('season_ar') is not None and float(params['season_ar']) > 0:
+                ar_val = float(params['season_ar'])
+                ak_val = round(ar_val * reserve_ratio / (1.0 - reserve_ratio), 2) if reserve_ratio < 1.0 else 0.0
+            elif acc.get('season_ar') is not None and float(acc['season_ar']) > 0:
+                ar_val = float(acc['season_ar'])
+                ak_val = round(ar_val * reserve_ratio / (1.0 - reserve_ratio), 2) if reserve_ratio < 1.0 else 0.0
+            else:
+                ar_val = round(effective_capital * (1.0 - reserve_ratio), 2)
+                ak_val = round(effective_capital * reserve_ratio, 2)
 
             normal_splits = float(strat.div_rounds.get('Normal', 8.0))
             safe_splits = float(strat.div_rounds.get('Safe', 7.0))
