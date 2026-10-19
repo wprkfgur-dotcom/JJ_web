@@ -671,18 +671,28 @@ class AccountManager:
         if not mode:
             mode = prev_rec.get('Mode', 'Normal') if prev_rec else 'Normal'
 
-        fee_rate = 0.001
+        strat_params = acc.get('strategy_params') or {}
+        fee_rate = float(strat_params.get('fee_rate', 0.00044))
         sec_fee = 0.0000278
+        max_hold = int(strat_params.get('max_hold_days', 10))
 
         # 1. 매도 체결 정산
+        # 당일 시점(today_t) 기준 미매도 슬롯 및 만기 도달(h_days >= max_hold) 슬롯 산출
+        today_t = existing_idx if existing_idx is not None else len(records)
+        unsold_lots = [r for r in records if r.get('R', 0) > 0 and not r.get('Sold', False)]
+        moc_shares = sum(int(l.get('R', 0)) for l in unsold_lots if (today_t - int(l.get('t', 0))) >= max_hold)
+
         sell_q = int(sell_qty)
+        # 종종이 전략: 10영업일 만기 도달 슬롯(MOC)은 매도 수량에 무조건 포함하여 강제 손절/청산
+        if '종종이' in acc.get('strategy', '') and moc_shares > 0:
+            sell_q = max(sell_q, moc_shares)
+
         sell_p = round(float(sell_price), 2) if sell_price is not None and sell_price > 0 else close_p
         net_sell_proceeds = 0.0
         total_profit = 0.0
         shares_to_sell = sell_q
 
         if shares_to_sell > 0:
-            unsold_lots = [r for r in records if r.get('R', 0) > 0 and not r.get('Sold', False)]
             def get_lot_u(lot):
                 bp = float(lot.get('BuyPrice', lot.get('Close', close_p)))
                 lot_mode = str(lot.get('Mode', 'Normal')).capitalize()
@@ -692,8 +702,8 @@ class AccountManager:
             # 슬롯 매도 우선순위 정렬 (만기 및 목표가 도달 익절 우선, 낮은 목표가 순)
             def get_sort_key(lot):
                 u_val = get_lot_u(lot)
-                h_days = len(records) - 1 - int(lot.get('t', 0))
-                is_moc = (h_days >= 10)
+                h_days = today_t - int(lot.get('t', 0))
+                is_moc = (h_days >= max_hold)
                 is_target_reached = (close_p >= u_val - 1e-4)
                 priority = 0 if (is_target_reached or is_moc) else 1
                 return (priority, u_val)
@@ -704,8 +714,8 @@ class AccountManager:
                 if shares_to_sell <= 0:
                     break
                 u_val = get_lot_u(lot)
-                h_days = len(records) - 1 - int(lot.get('t', 0))
-                is_moc = (h_days >= 10)
+                h_days = today_t - int(lot.get('t', 0))
+                is_moc = (h_days >= max_hold)
                 is_target_reached = (close_p >= u_val - 1e-4)
 
                 # 종종이 전략 보호: 목표가 미도달 및 만기 미도달 슬롯은 보호
@@ -1070,8 +1080,9 @@ class AccountManager:
             unsold_mask = (df_res['R'] > 0) & (~df_res['Sold'])
             unsold_df = df_res[unsold_mask]
             unsold_lots = []
+            target_t = len(df_res)
             for _, r_lot in unsold_df.iterrows():
-                h_days = len(df_res) - 1 - int(r_lot.get('t', 0))
+                h_days = target_t - int(r_lot.get('t', 0))
                 d_str = r_lot['Date'].strftime('%m.%d') if hasattr(r_lot['Date'], 'strftime') else str(r_lot['Date'])
                 lot_mode = str(r_lot.get('Mode', 'Normal')).capitalize()
                 close_p = float(r_lot['Close'])
