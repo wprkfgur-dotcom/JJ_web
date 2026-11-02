@@ -695,9 +695,44 @@ async function mOpenSettlementModal() {
       if (sellPriceEl) sellPriceEl.value = hasClose ? Number(res.close_price).toFixed(2) : '';
       if (buyQtyEl) buyQtyEl.value = res.suggested_buy_qty !== undefined ? res.suggested_buy_qty : 0;
       if (sellQtyEl) sellQtyEl.value = res.suggested_sell_qty !== undefined ? res.suggested_sell_qty : 0;
+      const activeBuyOrders = res.buy_orders || [];
+      const activeSellOrders = res.sell_orders || [];
+      if (closeEl) {
+        closeEl.oninput = () => {
+          const cp = parseFloat(closeEl.value);
+          if (!isNaN(cp) && cp > 0) {
+            if (buyPriceEl) buyPriceEl.value = cp.toFixed(2);
+            if (sellPriceEl) sellPriceEl.value = cp.toFixed(2);
+
+            let calcBuys = 0;
+            activeBuyOrders.forEach(bo => {
+              const bp = parseFloat(bo.price || bo.limit_price || 0);
+              if (bp > 0 && cp <= bp + 0.0001) {
+                calcBuys += parseInt(bo.qty || bo.order_qty || 0);
+              }
+            });
+            if (buyQtyEl) buyQtyEl.value = calcBuys;
+
+            let calcSells = 0;
+            activeSellOrders.forEach(so => {
+              const sp = parseFloat(so.price || so.limit_price || so.target_price || 0);
+              const isMoc = String(so.구분 || so.stage || '').includes('MOC');
+              if (isMoc) {
+                calcSells += parseInt(so.qty || so.order_qty || 0);
+              } else if (sp > 0 && cp >= sp - 0.0001) {
+                calcSells += parseInt(so.qty || so.order_qty || 0);
+              }
+            });
+            if (sellQtyEl) sellQtyEl.value = calcSells;
+          }
+        };
+      }
+
       const dateLabel = res.target_date ? `${res.target_date} ` : '';
       if (hasClose) {
         mToast(`💡 ${dateLabel}종가($${Number(res.close_price).toFixed(2)}) 및 체결량 자동 입력됨`);
+      } else {
+        mToast(`💡 종가를 입력하면 매수/매도 체결 수량이 실시간 자동 계산됩니다.`);
       }
     }
   } catch (e) {

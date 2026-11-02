@@ -381,7 +381,7 @@ async def get_settlement_preview(acc_id: str, request: Request):
 
     # 2-A. 메리츠 OpenAPI 연동 계좌인 경우 실제 체결 내역 조회 시도
     auto_cfg = target.get("auto_trade", {})
-    if auto_cfg.get("enabled") and auto_cfg.get("broker") == "meritz" and auto_cfg.get("app_key_enc") and auto_cfg.get("app_secret_enc"):
+    if auto_cfg.get("broker") == "meritz" and auto_cfg.get("app_key_enc") and auto_cfg.get("app_secret_enc"):
         try:
             client = MeritzClient(config_path="/dev/null")
             client.config = {
@@ -405,31 +405,42 @@ async def get_settlement_preview(acc_id: str, request: Request):
                 if cq_buy > 0 or cq_sell > 0:
                     suggested_buy_qty = cq_buy
                     suggested_sell_qty = cq_sell
-                    suggested_memo = f"메리츠 OpenAPI 실체결 조회 (매수 {cq_buy}주, 매도 {cq_sell}주)"
+                    suggested_memo = f"메리츠 OpenAPI 실체결 조회 (매수 {cq_buy:,}주, 매도 {cq_sell:,}주)"
                     is_api_filled = True
         except Exception as ex:
             print(f"[SettlementPreview] 메리츠 실체결 조회 안내: {ex}")
 
     # 2-B. 메리츠 실체결이 없거나 미연동인 경우 주문표 기반 예상 체결량 산출
+    buy_orders = details.get("buy_orders") or []
+    sell_orders = details.get("sell_orders") or []
+
     if not is_api_filled:
-        orders = details.get("orders", {}).get("orders", [])
-        buy_orders = [o for o in orders if o.get("side") == "BUY"]
-        if buy_orders:
+        # 매도 체결량 산출:
+        # 1) 10영업일 만기 도달 종가 시장가(MOC) 매도 수량은 종가와 무관하게 100% 당일 전량 체결!
+        moc_sells = sum(int(so.get("qty") or 0) for so in sell_orders if "MOC" in str(so.get("구분", "")))
+        loc_sells = 0
+        if close_price and float(close_price) > 0:
+            c_val = float(close_price)
+            for so in sell_orders:
+                if "MOC" not in str(so.get("구분", "")):
+                    so_p = float(so.get("price") or 0.0)
+                    if so_p > 0 and c_val >= so_p - 1e-4:
+                        loc_sells += int(so.get("qty") or 0)
+        suggested_sell_qty = moc_sells + loc_sells
+
+        # 매수 체결량 산출:
+        # 1) 종가가 있는 경우: 종가가 매수단가 이하인 LOC 매수 호가들의 체결 수량 누적 합산
+        # 2) 종가가 아직 없는 경우: 1차 순매수(퉁치기 상계) 수량을 기본값으로 제안
+        if close_price and float(close_price) > 0:
+            c_val = float(close_price)
             fillable_buys = 0
             for bo in buy_orders:
-                limit_p = float(bo.get("limit_price") or 0.0)
-                if close_price > 0 and close_price <= limit_p:
-                    fillable_buys += int(bo.get("order_qty") or 0)
-            suggested_buy_qty = fillable_buys if fillable_buys > 0 else int(buy_orders[0].get("order_qty") or 0)
-
-        sell_orders = [o for o in orders if o.get("side") == "SELL"]
-        if sell_orders:
-            fillable_sells = 0
-            for so in sell_orders:
-                target_u = float(so.get("target_price") or so.get("limit_price") or 0.0)
-                if close_price > 0 and close_price >= target_u:
-                    fillable_sells += int(so.get("order_qty") or 0)
-            suggested_sell_qty = fillable_sells
+                bo_p = float(bo.get("price") or 0.0)
+                if bo_p > 0 and c_val <= bo_p + 1e-4:
+                    fillable_buys += int(bo.get("qty") or 0)
+            suggested_buy_qty = fillable_buys
+        else:
+            suggested_buy_qty = int(buy_orders[0].get("qty") or 0) if buy_orders else 0
 
         suggested_memo = "당일 주문표 기준 자동 추천"
 
@@ -445,7 +456,9 @@ async def get_settlement_preview(acc_id: str, request: Request):
         "suggested_buy_qty": suggested_buy_qty,
         "suggested_sell_qty": suggested_sell_qty,
         "suggested_memo": suggested_memo,
-        "is_api_filled": is_api_filled
+        "is_api_filled": is_api_filled,
+        "buy_orders": buy_orders,
+        "sell_orders": sell_orders
     }
 
 

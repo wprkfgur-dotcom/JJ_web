@@ -1935,6 +1935,38 @@ async function openSettlementModal(accId) {
         if (sellInput) {
           sellInput.value = data.suggested_sell_qty !== undefined ? data.suggested_sell_qty : 0;
         }
+        let activeBuyOrders = data.buy_orders || [];
+        let activeSellOrders = data.sell_orders || [];
+
+        // 종가 변경 시 주문표와 실시간 대조하여 매수/매도 수량 자동 계산
+        if (closeInput) {
+          closeInput.oninput = () => {
+            const cp = parseFloat(closeInput.value);
+            if (!isNaN(cp) && cp > 0) {
+              let calcBuys = 0;
+              activeBuyOrders.forEach(bo => {
+                const bp = parseFloat(bo.price || bo.limit_price || 0);
+                if (bp > 0 && cp <= bp + 0.0001) {
+                  calcBuys += parseInt(bo.qty || bo.order_qty || 0);
+                }
+              });
+              if (buyInput) buyInput.value = calcBuys;
+
+              let calcSells = 0;
+              activeSellOrders.forEach(so => {
+                const sp = parseFloat(so.price || so.limit_price || so.target_price || 0);
+                const isMoc = String(so.구분 || so.stage || '').includes('MOC');
+                if (isMoc) {
+                  calcSells += parseInt(so.qty || so.order_qty || 0);
+                } else if (sp > 0 && cp >= sp - 0.0001) {
+                  calcSells += parseInt(so.qty || so.order_qty || 0);
+                }
+              });
+              if (sellInput) sellInput.value = calcSells;
+            }
+          };
+        }
+
         if (memoInput && data.suggested_memo) {
           memoInput.value = data.suggested_memo;
         }
@@ -1946,7 +1978,7 @@ async function openSettlementModal(accId) {
           if (data.close_price && Number(data.close_price) > 0) {
             bannerText.innerHTML = `💡 <strong>자동 완성됨:</strong> ${dateLabel} 마감 종가($${Number(data.close_price).toFixed(2)}) 및 수량이 미리 입력되었습니다. 필요 시 수정 후 [정산 완료]를 눌러주세요.`;
           } else {
-            bannerText.innerHTML = `⚠️ <strong>종가 직접 입력 필요:</strong> ${dateLabel} 마감 종가를 직접 입력 후 [정산 완료]를 눌러주세요.`;
+            bannerText.innerHTML = `⚠️ <strong>종가 직접 입력 필요:</strong> ${dateLabel} 마감 종가를 입력하면 체결 수량이 실시간으로 자동 계산됩니다.`;
           }
         }
       }
