@@ -12,19 +12,19 @@ def deploy():
     ssh.connect('138.2.62.43', port=2222, username='huxley', password='lee0320', timeout=10)
 
     def run_remote(cmd):
-        print(f"\n>>> Remote: {cmd}")
+        print(f"\n>>> Remote: {cmd}", flush=True)
         stdin, stdout, stderr = ssh.exec_command(cmd)
         out = stdout.read().decode('utf-8', errors='replace')
         err = stderr.read().decode('utf-8', errors='replace')
         if out.strip():
-            print(out.strip())
+            print(out.strip(), flush=True)
         if err.strip():
-            print("STDERR:", err.strip())
+            print(f"[STDERR] {err.strip()}", flush=True)
 
     run_remote("cd /home/huxley/oracle_web_server && git pull origin main")
-    run_remote("sudo systemctl restart jj_invest")
+    run_remote("echo lee0320 | sudo -S systemctl restart jj_invest")
     time.sleep(2)
-    run_remote("sudo systemctl status jj_invest --no-pager -n 10")
+    run_remote("systemctl is-active jj_invest")
     ssh.close()
     print("\n[SUCCESS] Deployment complete!")
 
