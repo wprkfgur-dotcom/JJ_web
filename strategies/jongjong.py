@@ -168,6 +168,272 @@ class JongJongStrategy(BaseStrategy):
         else:
             return prev_mode
 
+    def build_order_book(self, mode: str, p_budget: float, yest_close: float, unsold: list, t: int) -> dict:
+        """
+        [Step D] 일일 LOC 예약 주문표(엑셀 BH 열) 산출 — 백테스트와 실매매가 공유하는 단일 구현.
+        unsold: 미매도 슬롯 리스트, 각 원소는 {'t', 'R', 'U'} 키를 가져야 합니다.
+        반환: {orders: [(매수|매도, 가격, 수량)...], AV3, AU3, AV7, BB2, BB3, AY3, BE4, BF4}
+        """
+        M3 = self.max_hold_days
+        O4 = self.risk_buy_offset
+        C2 = self.range_normal
+        C3 = self.range_crash
+        C4 = self.order_split_count
+        C6 = self.order_curvature
+        # [Step D] 일일 LOC 예약 주문표 산출
+        moc_lots = [rec for rec in unsold if (t - rec['t']) == M3]
+        loc_lots = [rec for rec in unsold if (t - rec['t']) < M3]
+
+        AV7 = sum(rec['R'] for rec in moc_lots)
+        has_moc = len(moc_lots) > 0
+        AU1 = max(0.0, p_budget)
+        AU2 = yest_close
+        is_normal = (mode == 'Normal')
+        is_riskoff = (mode == 'Riskoff')
+
+        BB3 = excel_round(AU2 * (1.0 + C2), 2)
+        AU3, AV3 = None, 0
+        if len(loc_lots) > 0:
+            min_u = min(rec['U'] for rec in loc_lots)
+            if (is_normal and BB3 >= min_u) or (mode == 'Safe' and min_u <= safe_round4(AU2 * 1.01)):
+                AU3 = min_u
+                for rec in loc_lots:
+                    if rec['U'] == min_u:
+                        AV3 = rec['R']
+                        break
+
+        a_val = C2 if is_normal else (O4 if is_riskoff else 0.0)
+        if AU3 is not None and AU3 <= AU2 * (1.0 + a_val + 0.01):
+            AY2 = safe_round4(AU3 - 0.01)
+        else:
+            AY2 = safe_round4(AU2 * (1.0 + a_val) - 0.01)
+
+        AZ2 = int(AU1 / AY2) if AY2 > 0 else 0
+        BB2 = safe_round4(AU2 * (1.0 + a_val)) if ((not is_normal) and has_moc) else AU3
+        BC2 = int(AU1 / BB2) if (is_normal and BB2 is not None and BB2 > 0) else 0
+        AY3 = safe_round4(AU2 * (1.0 - C2))
+
+        if AU3 is not None and (BB3 - AY3) != 0:
+            AY4 = excel_round((AY2 - AY3) / (BB3 - AY3) * (C4 - 2) + 1.0, 0) - 1
+        else:
+            AY4 = C4 - 1
+        BB4 = C4 - 2 - AY4
+
+        # 하단 매수 호가 배열
+        ay_list = [AY2]
+        if AY4 - 1 > 0:
+            for i_seq in range(AY4 - 1):
+                if AY4 - 2 == 0:
+                    ay_list.append(None)
+                else:
+                    denom = AY3 + ((AY4 - 2.0 - i_seq) / (AY4 - 2.0)) ** C6 * (AY2 - AY3)
+                    val = round_down(AU1 / (AU1 / denom), 2) if (AU1 > 0 and denom > 0) else None
+                    ay_list.append(val)
+
+        az_list = [AZ2 - AV7]
+        for k in range(1, len(ay_list)):
+            if ay_list[k] is None or ay_list[k-1] is None or ay_list[k] <= 0 or ay_list[k-1] <= 0:
+                az_list.append(None)
+            else:
+                az_list.append(int(AU1 / ay_list[k]) - int(AU1 / ay_list[k-1]))
+
+        if any(x is None for x in ay_list):
+            AZ4 = 1
+            ay_valid = [AY2] if (AZ2 - AV7) != 0 else []
+        else:
+            AZ4 = len(ay_list)
+            ay_valid = [ay_list[k] for k in range(len(ay_list)) if az_list[k] != 0]
+
+        # 상단 호가 배열
+        bb_list, bc_list = [], []
+        if AU3 is not None or has_moc:
+            bb_list.append(BB2)
+            bc_list.append(AV3 + AV7 - BC2)
+        if AU3 is not None and BB4 - 1 > 0:
+            for i_seq in range(BB4 - 1):
+                if BB4 - 2 == 0:
+                    bb_list.append(None)
+                    bc_list.append(None)
+                else:
+                    denom = BB3 - ((BB4 - 2.0 - i_seq) / (BB4 - 2.0)) ** C6 * (BB3 - BB2)
+                    val = round_down(AU1 / (AU1 / denom), 2) if (AU1 > 0 and denom > 0) else None
+                    prev_p = bb_list[-1]
+                    bb_list.append(val)
+                    if val is None or prev_p is None or val <= 0 or prev_p <= 0:
+                        bc_list.append(None)
+                    else:
+                        bc_list.append(int(AU1 / prev_p) - int(AU1 / val))
+
+        if any(x is None for x in bb_list):
+            BC4 = 1
+            bb_valid = [bb_list[0]] if (len(bc_list) > 0 and bc_list[0] is not None and bc_list[0] != 0 and bb_list[0] is not None) else []
+        else:
+            BC4 = len(bb_list)
+            bb_valid = [bb_list[k] for k in range(len(bb_list)) if bc_list[k] != 0 and bb_list[k] is not None]
+
+        BE3 = round(round_down(AU1 / (AV3 + 1.0), 2) + 0.01, 2) if AV3 > 0 else None
+        BE4 = safe_round4(AU2 * (1.0 + C3))
+        BF4 = excel_round(AU1 / BE4, 0) if BE4 > 0 else 0
+
+        be_candidates = list(ay_valid) + list(bb_valid)
+        if BE3 is not None and AY3 <= BE3 <= BB3:
+            be_candidates.append(BE3)
+        if AZ4 == 1:
+            be_candidates.append(AY3)
+        if BC4 == 1:
+            be_candidates.append(BB3)
+        BE_col = sorted(be_candidates, reverse=True)
+
+        BF_col = []
+        for p in BE_col:
+            b_cond = 0 if ((not is_normal) and (BB2 is not None and BB2 <= p)) else 1
+            a_calc = (int(AU1 / p) if p > 0 else 0) * b_cond * (1 if p < BB3 else 0) - AV7 - (AV3 if (AU3 is not None and p >= AU3) else 0)
+            if AU3 is not None and p >= AU3 and a_calc > 0:
+                bf_val = (int(AU1 / (p - 0.01)) if (p - 0.01) > 0 else 0) - AV7 - AV3
+            else:
+                bf_val = a_calc
+            BF_col.append(bf_val)
+
+        BH_orders = []
+        for k in range(len(BE_col)):
+            p, bf = BE_col[k], BF_col[k]
+            bf_prev = BF_col[k-1] if k > 0 else None
+            bf_next = BF_col[k+1] if k + 1 < len(BE_col) else 0
+            p_next = BE_col[k+1] if k + 1 < len(BE_col) else None
+
+            if bf > 0:
+                if bf_prev is not None and bf_prev == 0:
+                    continue
+                deduct = 0.01 if (AU3 is not None and p >= AU3 and p != BB2) else 0.0
+                ord_q = bf - (bf_prev if (bf_prev is not None and bf_prev > 0) else 0)
+                if ord_q != 0:
+                    BH_orders.append(("매수", safe_round4(p - deduct), ord_q))
+            elif bf < 0:
+                add = 0.01 if (p_next is not None and p == p_next and bf < 0 and bf_next > 0) else 0.0
+                ord_q = (bf_next if bf_next < 0 else 0) - bf
+                if ord_q != 0:
+                    BH_orders.append(("매도", safe_round4(p + add), ord_q))
+
+
+        return {'orders': BH_orders, 'AV3': AV3, 'AU3': AU3, 'AV7': AV7, 'BB2': BB2, 'BB3': BB3,
+                'AY3': AY3, 'BE4': BE4, 'BF4': BF4}
+
+    # ------------------------------------------------------------------
+    # 실매매/백테스트 공용 재계산 헬퍼 (엑셀 수식과 동일한 규칙)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def ma_flags(closes: list):
+        """종가 시계열 -> (G: MA5>=MA20, H: 종가>=MA20, I: 1일 등락, J: 2일 등락) 리스트."""
+        n = len(closes)
+        g, h, i_c, j_c = [], [], [], []
+        for k in range(n):
+            m5 = closes[k] if k < 4 else float(np.mean(closes[k-4:k+1]))
+            m20 = closes[k] if k < 19 else float(np.mean(closes[k-19:k+1]))
+            g.append(bool(m5 >= m20))
+            h.append(bool(closes[k] >= m20))
+            i_chg = 0.0 if k == 0 else (closes[k] / closes[k-1] - 1.0)
+            i_c.append(i_chg)
+            j_c.append(i_chg if k < 2 else (closes[k] / closes[k-2] - 1.0))
+        return g, h, i_c, j_c
+
+    def replay_base_modes(self, closes: list, anchor_idx: int = 0, anchor_mode: str = 'Normal') -> list:
+        """
+        Risk-off 와 무관하게 흐르는 기본 모드(엑셀 DB_Mode) 상태기계를 재생합니다.
+        closes: 어제까지의 종가 시계열(길이 n). 반환 길이 n+1 (마지막 원소가 '오늘' 기본 모드).
+        anchor_idx 시점의 모드는 anchor_mode 로 고정(실계좌에 기록된 모드를 신뢰)하고 이후부터 재생합니다.
+        """
+        g, h, i_c, j_c = self.ma_flags(closes)
+        n = len(closes)
+        modes = []
+        for k in range(n + 1):
+            if k < 3:
+                m = 'Normal'
+            else:
+                cond_safe = ((not h[k-3]) and h[k-2] and (i_c[k-1] <= -0.03)) or (g[k-2] and (i_c[k-1] <= -0.08))
+                cond_norm = ((not g[k-2]) and (i_c[k-1] >= 0.058)) or ((not g[k-2]) and (j_c[k-1] >= 0.06))
+                m = 'Safe' if cond_safe else ('Normal' if cond_norm else modes[k-1])
+            if k == anchor_idx:
+                m = anchor_mode if anchor_mode in ('Normal', 'Safe') else 'Normal'
+            modes.append(m)
+        return modes
+
+    def replay_risk_state(self, records: list, closes_by_date: dict) -> list:
+        """
+        실계좌 일지(records)에 Risk-off 상태값(N, O, DD, Flag)을 백테스트 run() 과 동일한 규칙으로 채웁니다.
+        - N : 10일차(시간손절) 슬롯이 당일 청산되면 15, 이후 매일 -1
+        - O : 당일 등락 < -15% 이고 자산 DD < -8% 이면 1
+        - Flag : MA5<MA20 이면서 ((N>0 and O>0) or 전일 Flag)  / MA5>=MA20 이면 해제
+        closes_by_date: {'YYYY-MM-DD': 종가} (이동평균 계산용 전체 이력)
+        """
+        M3 = self.max_hold_days
+        O2 = self.risk_dd_threshold
+        O3 = self.risk_drop_threshold
+
+        dates = sorted(closes_by_date.keys())
+        closes = [float(closes_by_date[d]) for d in dates]
+        g_all, _, _, _ = self.ma_flags(closes)
+        g_by_date = {d: g_all[k] for k, d in enumerate(dates)}
+
+        max_asset = None
+        prev_n = 0
+        prev_flag = False
+        for t, rec in enumerate(records):
+            d = str(rec.get('Date'))[:10]
+            asset = float(rec.get('Asset', 0.0))
+            if max_asset is None:
+                max_asset = max(float(self.initial_capital), asset)
+            else:
+                max_asset = max(max_asset, asset)
+            dd = asset / max_asset - 1.0 if max_asset > 0 else 0.0
+
+            if t > 0:
+                prev_close = float(records[t-1].get('Close', 0.0))
+                chg = float(rec.get('Close', 0.0)) / prev_close - 1.0 if prev_close > 0 else 0.0
+            else:
+                chg = 0.0
+
+            lot = records[t - M3] if t >= M3 else None
+            time_stop_today = bool(lot is not None and int(lot.get('R', 0) or 0) > 0 and str(lot.get('W') or '')[:10] == d)
+            n_val = 15 if time_stop_today else max(0, prev_n - 1)
+            o_val = 1 if (t > 0 and chg < O3 and dd < O2) else 0
+            stable = g_by_date.get(d, True)
+            flag = False if stable else ((n_val > 0 and o_val > 0) or prev_flag)
+
+            rec['N'] = n_val
+            rec['O'] = o_val
+            rec['DD'] = round(dd, 6)
+            rec['Flag'] = bool(flag)
+            prev_n, prev_flag = n_val, flag
+        return records
+
+    def replay_ar_ak(self, records: list, t_target: int, mode_target: str, seed: float):
+        """
+        10거래일 주기 복리 시드(AR) / 위기준비금(AK) 를 백테스트 Step B / B-2 와 동일하게 재생합니다.
+        t_target: 산출 대상 일자의 인덱스(= 일지 길이이면 '오늘'), mode_target: 대상 일자의 모드.
+        반환: (AR, AK)
+        """
+        M4 = self.reserve_ratio
+        cyc = self.reinvest_cycle
+        ak = seed * M4
+        ar = seed - ak
+        for t in range(0, t_target + 1):
+            if t == 0:
+                pass
+            elif cyc > 0 and t >= cyc * 2 and t % cyc == 0:
+                pf = 0.0
+                for k in range(t - cyc * 2, t - cyc):
+                    if k < len(records) and records[k].get('Profit') is not None:
+                        pf += float(records[k]['Profit'])
+                deduct = M4 if (ak + pf > 0) else 0.0
+                ak += pf * deduct
+                ar += pf * (1.0 - deduct)
+            mode_t = records[t].get('Mode', 'Normal') if t < len(records) else mode_target
+            prev_mode = records[t-1].get('Mode', 'Normal') if t > 0 else 'Normal'
+            if self.reserve_merge_on_riskoff and mode_t == 'Riskoff' and prev_mode != 'Riskoff' and ak > 0:
+                ar += ak
+                ak = 0.0
+        return ar, ak
+
     def run(self, df_data: pd.DataFrame, start_date: str, end_date: str) -> pd.DataFrame:
         df = self.prepare_indicators(df_data, start_date)
         valid_indices = df[(df['Date'] >= pd.Timestamp(start_date)) & (df['Date'] <= pd.Timestamp(end_date))].index
@@ -273,140 +539,11 @@ class JongJongStrategy(BaseStrategy):
             daily_budget = min(current_mode_p, season_remaining_budget)
             p_budget = max(0.0, min(daily_budget, curr_cash_before_trade))
 
-            # [Step D] 일일 LOC 예약 주문표 산출
+            # [Step D] 일일 LOC 예약 주문표 산출 (build_order_book 공용 구현)
             unsold = [rec for rec in records if rec['R'] > 0 and not rec['Sold']]
-            moc_lots = [rec for rec in unsold if (t - rec['t']) == M3]
-            loc_lots = [rec for rec in unsold if (t - rec['t']) < M3]
-
-            AV7 = sum(rec['R'] for rec in moc_lots)
-            has_moc = len(moc_lots) > 0
-            AU1 = max(0.0, p_budget)
-            AU2 = yest_close
-            is_normal = (mode == 'Normal')
-            is_riskoff = (mode == 'Riskoff')
-
-            BB3 = excel_round(AU2 * (1.0 + C2), 2)
-            AU3, AV3 = None, 0
-            if len(loc_lots) > 0:
-                min_u = min(rec['U'] for rec in loc_lots)
-                if (is_normal and BB3 >= min_u) or (mode == 'Safe' and min_u <= safe_round4(AU2 * 1.01)):
-                    AU3 = min_u
-                    for rec in loc_lots:
-                        if rec['U'] == min_u:
-                            AV3 = rec['R']
-                            break
-
-            a_val = C2 if is_normal else (O4 if is_riskoff else 0.0)
-            if AU3 is not None and AU3 <= AU2 * (1.0 + a_val + 0.01):
-                AY2 = safe_round4(AU3 - 0.01)
-            else:
-                AY2 = safe_round4(AU2 * (1.0 + a_val) - 0.01)
-
-            AZ2 = int(AU1 / AY2) if AY2 > 0 else 0
-            BB2 = safe_round4(AU2 * (1.0 + a_val)) if ((not is_normal) and has_moc) else AU3
-            BC2 = int(AU1 / BB2) if (is_normal and BB2 is not None and BB2 > 0) else 0
-            AY3 = safe_round4(AU2 * (1.0 - C2))
-
-            if AU3 is not None and (BB3 - AY3) != 0:
-                AY4 = excel_round((AY2 - AY3) / (BB3 - AY3) * (C4 - 2) + 1.0, 0) - 1
-            else:
-                AY4 = C4 - 1
-            BB4 = C4 - 2 - AY4
-
-            # 하단 매수 호가 배열
-            ay_list = [AY2]
-            if AY4 - 1 > 0:
-                for i_seq in range(AY4 - 1):
-                    if AY4 - 2 == 0:
-                        ay_list.append(None)
-                    else:
-                        denom = AY3 + ((AY4 - 2.0 - i_seq) / (AY4 - 2.0)) ** C6 * (AY2 - AY3)
-                        val = round_down(AU1 / (AU1 / denom), 2) if (AU1 > 0 and denom > 0) else None
-                        ay_list.append(val)
-
-            az_list = [AZ2 - AV7]
-            for k in range(1, len(ay_list)):
-                if ay_list[k] is None or ay_list[k-1] is None or ay_list[k] <= 0 or ay_list[k-1] <= 0:
-                    az_list.append(None)
-                else:
-                    az_list.append(int(AU1 / ay_list[k]) - int(AU1 / ay_list[k-1]))
-
-            if any(x is None for x in ay_list):
-                AZ4 = 1
-                ay_valid = [AY2] if (AZ2 - AV7) != 0 else []
-            else:
-                AZ4 = len(ay_list)
-                ay_valid = [ay_list[k] for k in range(len(ay_list)) if az_list[k] != 0]
-
-            # 상단 호가 배열
-            bb_list, bc_list = [], []
-            if AU3 is not None or has_moc:
-                bb_list.append(BB2)
-                bc_list.append(AV3 + AV7 - BC2)
-            if AU3 is not None and BB4 - 1 > 0:
-                for i_seq in range(BB4 - 1):
-                    if BB4 - 2 == 0:
-                        bb_list.append(None)
-                        bc_list.append(None)
-                    else:
-                        denom = BB3 - ((BB4 - 2.0 - i_seq) / (BB4 - 2.0)) ** C6 * (BB3 - BB2)
-                        val = round_down(AU1 / (AU1 / denom), 2) if (AU1 > 0 and denom > 0) else None
-                        prev_p = bb_list[-1]
-                        bb_list.append(val)
-                        if val is None or prev_p is None or val <= 0 or prev_p <= 0:
-                            bc_list.append(None)
-                        else:
-                            bc_list.append(int(AU1 / prev_p) - int(AU1 / val))
-
-            if any(x is None for x in bb_list):
-                BC4 = 1
-                bb_valid = [bb_list[0]] if (len(bc_list) > 0 and bc_list[0] is not None and bc_list[0] != 0 and bb_list[0] is not None) else []
-            else:
-                BC4 = len(bb_list)
-                bb_valid = [bb_list[k] for k in range(len(bb_list)) if bc_list[k] != 0 and bb_list[k] is not None]
-
-            BE3 = round(round_down(AU1 / (AV3 + 1.0), 2) + 0.01, 2) if AV3 > 0 else None
-            BE4 = safe_round4(AU2 * (1.0 + C3))
-            BF4 = excel_round(AU1 / BE4, 0) if BE4 > 0 else 0
-
-            be_candidates = list(ay_valid) + list(bb_valid)
-            if BE3 is not None and AY3 <= BE3 <= BB3:
-                be_candidates.append(BE3)
-            if AZ4 == 1:
-                be_candidates.append(AY3)
-            if BC4 == 1:
-                be_candidates.append(BB3)
-            BE_col = sorted(be_candidates, reverse=True)
-
-            BF_col = []
-            for p in BE_col:
-                b_cond = 0 if ((not is_normal) and (BB2 is not None and BB2 <= p)) else 1
-                a_calc = (int(AU1 / p) if p > 0 else 0) * b_cond * (1 if p < BB3 else 0) - AV7 - (AV3 if (AU3 is not None and p >= AU3) else 0)
-                if AU3 is not None and p >= AU3 and a_calc > 0:
-                    bf_val = (int(AU1 / (p - 0.01)) if (p - 0.01) > 0 else 0) - AV7 - AV3
-                else:
-                    bf_val = a_calc
-                BF_col.append(bf_val)
-
-            BH_orders = []
-            for k in range(len(BE_col)):
-                p, bf = BE_col[k], BF_col[k]
-                bf_prev = BF_col[k-1] if k > 0 else None
-                bf_next = BF_col[k+1] if k + 1 < len(BE_col) else 0
-                p_next = BE_col[k+1] if k + 1 < len(BE_col) else None
-
-                if bf > 0:
-                    if bf_prev is not None and bf_prev == 0:
-                        continue
-                    deduct = 0.01 if (AU3 is not None and p >= AU3 and p != BB2) else 0.0
-                    ord_q = bf - (bf_prev if (bf_prev is not None and bf_prev > 0) else 0)
-                    if ord_q != 0:
-                        BH_orders.append(("매수", safe_round4(p - deduct), ord_q))
-                elif bf < 0:
-                    add = 0.01 if (p_next is not None and p == p_next and bf < 0 and bf_next > 0) else 0.0
-                    ord_q = (bf_next if bf_next < 0 else 0) - bf
-                    if ord_q != 0:
-                        BH_orders.append(("매도", safe_round4(p + add), ord_q))
+            book = self.build_order_book(mode, p_budget, yest_close, unsold, t)
+            BH_orders, AV3, AU3, AV7 = book['orders'], book['AV3'], book['AU3'], book['AV7']
+            BE4, BF4 = book['BE4'], book['BF4']
 
             # [Step E] 장 마감 후 종가(close_p) 기준 체결 정산
             BQ3 = close_p

@@ -634,6 +634,11 @@ class AccountManager:
             acc['current_price'] = float(last_r.get('Close', acc.get('current_price', 0.0)))
             acc['total_asset'] = float(last_r.get('Asset', acc.get('total_asset', 0.0)))
         acc['operational_state'] = 'WAITING_FOR_FILL'  # 미국 장전 - LOC 주문 대기 상태
+        try:
+            details = self.compute_account_details(acc)
+            acc['order_table'] = details.get('orders', {})
+        except Exception as ex:
+            print(f"[AccountManager] advance_next_day 주문표 갱신 안내: {ex}")
         self.save_accounts(accounts)
         return acc
 
@@ -819,12 +824,27 @@ class AccountManager:
         else:
             records.append(new_entry)
 
+        # 종종이 전략: N, O, DD, Flag 및 복리 AR/AK 상태를 백테스트/엑셀 규칙으로 일지 전체에 갱신
+        if '종종이' in acc.get('strategy', ''):
+            try:
+                self.refresh_jongjong_state(acc)
+            except Exception as ex:
+                print(f"[AccountManager] refresh_jongjong_state 안내: {ex}")
+
         acc['current_date'] = curr_d_str
         acc['current_cash'] = new_cash
         acc['current_holdings'] = new_hold
         acc['total_asset'] = new_asset
         acc['current_price'] = close_p
         acc['operational_state'] = 'DAY_COMPLETED'  # 장 마감 정산 완료 상태
+
+        # 정산 완료 후 익일 주문표 자동 최신화
+        try:
+            details = self.compute_account_details(acc)
+            acc['order_table'] = details.get('orders', {})
+        except Exception as ex:
+            print(f"[AccountManager] 정산 후 주문표 갱신 안내: {ex}")
+
         self.save_accounts(accounts)
 
         # 시스템 전역 종가 변수에 등록 (모든 사용자/계좌가 즉시 공유)
@@ -917,6 +937,108 @@ class AccountManager:
 
         self.save_accounts(accounts)
         return True
+
+    # ------------------------------------------------------------------
+    # 종종이 실매매 공용 헬퍼 (백테스트 JongJongStrategy 재생 로직 연동)
+    # ------------------------------------------------------------------
+    def make_jongjong_strategy(self, acc: dict) -> JongJongStrategy:
+        params = acc.get('strategy_params') or {}
+        res_ratio = float(params.get('reserve_ratio', acc.get('reserve_ratio', 0.05)))
+        return JongJongStrategy(
+            initial_capital=float(acc.get('initial_seed', 100000.0)),
+            reserve_ratio=res_ratio,
+            max_hold_days=int(params.get('max_hold_days', 10)),
+            fee_rate=float(params.get('fee_rate', 0.0)),
+            target_yields={
+                'Normal': float(params.get('normal_target_yield', 0.0275)),
+                'Safe': float(params.get('safe_target_yield', 0.0025)),
+                'Riskoff': float(params.get('riskoff_target_yield', 0.0070))
+            },
+            div_rounds={
+                'Normal': float(params.get('normal_splits', 8.0)),
+                'Safe': float(params.get('safe_splits', 7.0)),
+                'Riskoff': float(params.get('riskoff_splits', 5.0))
+            }
+        )
+
+    def ar_seed_for(self, acc: dict, strat: JongJongStrategy) -> float:
+        """
+        AR 재생의 시작 시드. 입출금 반영 순자본을 사용하되,
+        과거 이력이 일부만 이관된 계좌는 strategy_params['season_ar'] 로 '일지 첫 행 시점의 AR' 을 고정할 수 있습니다.
+        """
+        params = acc.get('strategy_params') or {}
+        override = params.get('season_ar', acc.get('season_ar'))
+        if override is not None and float(override) > 0 and strat.reserve_ratio < 1.0:
+            return float(override) / (1.0 - strat.reserve_ratio)
+        deposited = sum(float(a.get('amount', 0.0)) for a in acc.get('adjustments', []) if a.get('type') == 'DEPOSIT')
+        withdrawn = sum(float(a.get('amount', 0.0)) for a in acc.get('adjustments', []) if a.get('type') == 'WITHDRAW')
+        return float(acc.get('initial_seed', 0.0)) + deposited - withdrawn
+
+    def closes_by_date(self, acc: dict, upto_date: str = None, include_upto: bool = True) -> dict:
+        """로컬 시세 DB + 일지 종가를 합친 {날짜: 종가}. upto_date 이전(또는 이하)만 반환."""
+        closes = {}
+        try:
+            from core.data import get_cached_candles_from_db
+            end = upto_date or '2100-01-01'
+            df_cached = get_cached_candles_from_db(acc.get('ticker', 'SOXL'), '2020-01-01', end)
+            if df_cached is not None and not df_cached.empty:
+                for _, crow in df_cached.iterrows():
+                    d_key = crow['Date'].strftime('%Y-%m-%d') if hasattr(crow['Date'], 'strftime') else str(crow['Date'])[:10]
+                    closes[d_key] = float(crow['Close'])
+        except Exception as ex:
+            print(f"[AccountManager] 시세 DB 조회 안내: {ex}")
+        for r in acc.get('trade_records', []):
+            r_d = str(r.get('Date', ''))[:10]
+            if r_d and r.get('Close') is not None:
+                closes[r_d] = float(r['Close'])
+        if upto_date:
+            closes = {d: c for d, c in closes.items() if (d <= upto_date if include_upto else d < upto_date)}
+        return closes
+
+    def resolve_mode_for_date(self, acc: dict, strat: JongJongStrategy, target_date: str) -> str:
+        """
+        target_date 장전 모드 판정 (백테스트와 동일):
+        전일 Risk-off 플래그가 켜져 있으면 Riskoff, 아니면 기본 모드 상태기계 값.
+        기본 모드는 일지의 마지막 비(非)Risk-off 기록 모드를 기준점으로 삼아 이후를 재생합니다.
+        """
+        import copy
+        prior = [copy.deepcopy(r) for r in acc.get('trade_records', []) if str(r.get('Date', ''))[:10] < target_date]
+        if not prior:
+            return 'Normal'
+        closes_map = self.closes_by_date(acc, target_date, include_upto=False)
+        strat.replay_risk_state(prior, closes_map)
+        prev_flag = bool(prior[-1].get('Flag', False))
+
+        dates = sorted(closes_map.keys())
+        closes = [closes_map[d] for d in dates]
+        if len(closes) < 3:
+            return 'Riskoff' if prev_flag else str(prior[-1].get('Mode', 'Normal'))
+
+        anchor_idx, anchor_mode = 0, 'Normal'
+        for r in reversed(prior):
+            if str(r.get('Mode', 'Normal')) != 'Riskoff':
+                r_d = str(r.get('Date'))[:10]
+                if r_d in closes_map:
+                    anchor_idx, anchor_mode = dates.index(r_d), str(r.get('Mode', 'Normal'))
+                break
+        base_modes = strat.replay_base_modes(closes, anchor_idx, anchor_mode)
+        return 'Riskoff' if prev_flag else base_modes[-1]
+
+    def refresh_jongjong_state(self, acc: dict):
+        """일지 전체에 Risk-off 상태(N, O, DD, Flag)와 AR/AK 를 백테스트 규칙으로 재기록합니다."""
+        if '종종이' not in acc.get('strategy', ''):
+            return
+        records = acc.get('trade_records', [])
+        if not records:
+            return
+        strat = self.make_jongjong_strategy(acc)
+        last_d = str(records[-1].get('Date'))[:10]
+        strat.replay_risk_state(records, self.closes_by_date(acc, last_d, include_upto=True))
+        seed = self.ar_seed_for(acc, strat)
+        for t_i, rec in enumerate(records):
+            ar_i, ak_i = strat.replay_ar_ak(records, t_i, rec.get('Mode', 'Normal'), seed)
+            rec['AR'] = round(ar_i, 2)
+            rec['AK'] = round(ak_i, 2)
 
     def compute_account_details(self, acc: dict, df_market: pd.DataFrame = None) -> dict:
         """
@@ -1108,39 +1230,12 @@ class AccountManager:
                 })
 
             # 목표 운용일(target_order_date)의 시장 모드(Normal / Safe / Riskoff) 정밀 판별
+            # (백테스트와 동일: Risk-off 플래그 우선, 해제 후에는 기본 모드 상태기계로 복귀)
             if acc.get('manual_mode'):
                 mode = acc['manual_mode']
             else:
                 try:
-                    from core.data import get_cached_candles_from_db
-                    # 1. 과거 시세 확보 (로컬 DB + trade_records 결합)
-                    closes_dict = {}
-                    df_cached = get_cached_candles_from_db(ticker, '2020-01-01', target_order_date)
-                    if not df_cached.empty:
-                        for _, crow in df_cached.iterrows():
-                            d_key = crow['Date'].strftime('%Y-%m-%d') if hasattr(crow['Date'], 'strftime') else str(crow['Date'])[:10]
-                            closes_dict[d_key] = float(crow['Close'])
-
-                    for r in records:
-                        r_d = str(r.get('Date', ''))[:10]
-                        if r_d and r.get('Close') is not None:
-                            closes_dict[r_d] = float(r['Close'])
-
-                    # 오늘(target_order_date) 장전이므로 오늘 이전(< target_order_date)의 마감된 거래일 종가만 시간순 추출
-                    valid_dates = sorted([d for d in closes_dict.keys() if d < target_order_date])
-                    closes_series = [closes_dict[d] for d in valid_dates]
-
-                    prev_mode = str(last_row.get('Mode', 'Normal')) if len(last_row) > 0 else 'Normal'
-                    prev_flag = bool(last_row.get('Flag', False)) if len(last_row) > 0 else False
-
-                    if len(closes_series) >= 3:
-                        mode = strat.determine_next_mode(
-                            closes_series=closes_series,
-                            prev_mode=prev_mode,
-                            prev_flag=prev_flag
-                        )
-                    else:
-                        mode = prev_mode
+                    mode = self.resolve_mode_for_date(acc, strat, target_order_date)
                 except Exception as ex:
                     print(f"[{ticker}] 익일 모드 정밀 판정 안내 (fallback 사용): {ex}")
                     mode = str(last_row.get('Mode', 'Normal')) if len(last_row) > 0 else 'Normal'
@@ -1153,16 +1248,10 @@ class AccountManager:
             season_records = records[season_start_idx:]
 
             target_yield = strat.target_yields.get(mode, 0.0275)
-            reserve_ratio = float(acc.get('reserve_ratio', 0.05))
-            if params.get('season_ar') is not None and float(params['season_ar']) > 0:
-                ar_val = float(params['season_ar'])
-                ak_val = round(ar_val * reserve_ratio / (1.0 - reserve_ratio), 2) if reserve_ratio < 1.0 else 0.0
-            elif acc.get('season_ar') is not None and float(acc['season_ar']) > 0:
-                ar_val = float(acc['season_ar'])
-                ak_val = round(ar_val * reserve_ratio / (1.0 - reserve_ratio), 2) if reserve_ratio < 1.0 else 0.0
-            else:
-                ar_val = round(effective_capital * (1.0 - reserve_ratio), 2)
-                ak_val = round(effective_capital * reserve_ratio, 2)
+            reserve_ratio = strat.reserve_ratio
+            # 10거래일 주기 복리 AR / 위기준비금 AK (백테스트 Step B / B-2 와 동일 재생)
+            ar_val, ak_val = strat.replay_ar_ak(records, len(records), mode, self.ar_seed_for(acc, strat))
+            ar_val, ak_val = round(ar_val, 2), round(ak_val, 2)
 
             normal_splits = float(strat.div_rounds.get('Normal', 8.0))
             safe_splits = float(strat.div_rounds.get('Safe', 7.0))
@@ -1187,10 +1276,10 @@ class AccountManager:
 
             # 당일 매수 예정금 (budget):
             # Normal로 7일 보낸 후 Safe 전환 시 남은 1회분만 매수, 잔여 예산 소진 시 9~10일차 매수 불가(0원)
-            # 또한 실제 계좌 예수금(final_cash)이 부족할 경우 보유 현금 한도 내로 매수 예산 제한
+            # 또한 실제 예수금에서 위기준비금(AK 금고)을 뺀 가용 현금 한도 내로 매수 예산 제한
             budget = min(current_mode_p, season_remaining_budget)
             if final_cash > 0:
-                budget = min(budget, final_cash)
+                budget = min(budget, max(0.0, final_cash - ak_val))
             budget = max(0.0, round(budget, 2))
 
             season_info = {
@@ -1394,6 +1483,10 @@ class AccountManager:
             'mode': mode,
             'sell_orders': sell_orders,
             'buy_orders': buy_orders,
+            'orders': {
+                'buy_orders': buy_orders,
+                'sell_orders': sell_orders
+            },
             'unsold_lots': unsold_lots,
             'netting_info': net_result,
             'season_info': season_info if 'season_info' in locals() else None,
